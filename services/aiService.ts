@@ -78,7 +78,7 @@ async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenera
         model: GROQ_MODEL,
         messages: [
             { role: 'user', content: finalPrompt },
-            { role: 'model', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
+            { role: 'assistant', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
             { role: 'user', content: text }
         ],
         stream: true,
