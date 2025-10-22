@@ -1,33 +1,17 @@
-/**
- * @file This service acts as a modular interface for AI-powered translation and text generation.
- * It can dynamically switch between multiple AI providers based on user selection.
- *
- * @important
- * This application now supports both Google Gemini and Groq.
- * You must provide API keys for both services in your Vercel environment variables:
- * - API_KEY: For Google Gemini (as per guidelines)
- * - GROQ_API_KEY: For Groq
- * - The app will throw an error if the key for the selected provider is missing.
- */
-
 import { GoogleGenAI } from "@google/genai";
 import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT } from '../constants';
 import { Novel } from "../types";
 
-// --- Provider-Specific Configurations ---
-
-const groqApiKey = (process as any).env.GROQ_API_KEY;
-const geminiApiKey = (process as any).env.API_KEY;
+const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
+const geminiApiKey = import.meta.env.VITE_API_KEY;
 
 const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// --- Gemini Implementations ---
-
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
-    if (!geminiAi) throw new Error("Gemini API key (API_KEY) is not configured in environment variables.");
+    if (!geminiAi) throw new Error("Gemini API key (VITE_API_KEY) is not configured in environment variables.");
     
     try {
         const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
@@ -52,7 +36,7 @@ async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGene
 }
 
 async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
-    if (!geminiAi) throw new Error("Gemini API key (API_KEY) is not configured in environment variables.");
+    if (!geminiAi) throw new Error("Gemini API key (VITE_API_KEY) is not configured in environment variables.");
     
     try {
         const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
@@ -70,10 +54,8 @@ async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chin
     }
 }
 
-// --- Groq (OpenAI-Compatible) Implementations ---
-
 async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenerator<string> {
-    if (!groqApiKey) throw new Error("Groq API key (GROQ_API_KEY) is not configured in environment variables.");
+    if (!groqApiKey) throw new Error("Groq API key (VITE_GROQ_API_KEY) is not configured in environment variables.");
     
     const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
     const finalPrompt = basePrompt.replace('{{GLOSSARY}}', novel.customGlossary || '');
@@ -123,7 +105,7 @@ async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenera
 }
 
 async function generateGlossaryWithGroq(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
-    if (!groqApiKey) throw new Error("Groq API key (GROQ_API_KEY) is not configured in environment variables.");
+    if (!groqApiKey) throw new Error("Groq API key (VITE_GROQ_API_KEY) is not configured in environment variables.");
     
     const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
     const prompt = GLOSSARY_SUGGESTION_PROMPT.replace('{{CONTEXT}}', context).replace(/{{LANGUAGE_NAME}}/g, languageName);
@@ -148,11 +130,6 @@ async function generateGlossaryWithGroq(context: string, sourceLanguage: 'chines
     return data.choices[0]?.message?.content || '';
 }
 
-// --- Public API Dispatchers ---
-
-/**
- * Translates text by dispatching to the appropriate provider based on the novel's settings.
- */
 export async function* translateTextStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!text) return;
     
@@ -168,9 +145,6 @@ export async function* translateTextStream(text: string, novel: Novel): AsyncGen
     }
 }
 
-/**
- * Generates glossary suggestions by dispatching to the appropriate provider.
- */
 export const generateGlossarySuggestions = async (
     context: string,
     sourceLanguage: 'chinese' | 'korean',
@@ -187,3 +161,4 @@ export const generateGlossarySuggestions = async (
             throw new Error(`Unknown AI provider: ${provider}`);
     }
 };
+
