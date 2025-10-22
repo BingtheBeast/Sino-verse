@@ -3,7 +3,6 @@ import { ScrapedChapter } from '../types';
 const SCRAPINGBEE_API_URL = 'https://app.scrapingbee.com/api/v1/';
 
 export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
-  console.log('Actively scraping for selector suggestions at:', url);
   if (!url || !url.startsWith('http')) {
       throw new Error('Please enter a valid URL.');
   }
@@ -29,47 +28,51 @@ export const getSelectorSuggestions = async (url: string): Promise<string[]> => 
     const html = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-
-    const scores = new Map<string, number>();
-    const commonSelectors = [
-        '#content', '.content', '#chapter-content', '.chapter-content', 
-        'article', '.entry-content', '.main-content', '#text', '.text'
-    ];
     
-    commonSelectors.forEach(selector => {
-        if (doc.querySelector(selector)) {
-            scores.set(selector, 100); 
-        }
-    });
+    const scores = new Map<string, number>();
+    const forbiddenTags = new Set(['NAV', 'HEADER', 'FOOTER', 'ASIDE', 'SCRIPT', 'STYLE', 'FORM', 'BUTTON', 'A', 'UL', 'LI', 'IFRAME', 'FIGURE', 'FIGCAPTION']);
 
-    doc.querySelectorAll('*').forEach(el => {
-        const textLength = el.textContent?.trim().length || 0;
-        if (textLength > 200 && el.children.length < 5) {
-            let selector: string | null = null;
-            if (el.id) {
-                selector = `#${el.id}`;
-            } else if (el.className && typeof el.className === 'string') {
-                const classes = el.className.trim().split(/\s+/).filter(Boolean);
-                if (classes.length > 0) {
-                    selector = `.${classes.join('.')}`;
+    doc.body.querySelectorAll('div, article, section, main').forEach(el => {
+      let parent = el.parentElement;
+      let isChildOfForbidden = false;
+      while(parent && parent !== doc.body) {
+        if (forbiddenTags.has(parent.tagName.toUpperCase())) {
+          isChildOfForbidden = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      if (isChildOfForbidden) return;
+      
+      const directTextLength = Array.from(el.childNodes)
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .reduce((acc, node) => acc + (node.textContent?.trim().length || 0), 0);
+
+      if (directTextLength < 100) return;
+      
+      const pCount = el.querySelectorAll('p').length;
+      const linkCount = el.querySelectorAll('a').length;
+
+      let score = (directTextLength * 1.0) + (pCount * 10) - (linkCount * 5);
+      
+      if (score > 100) { 
+        let selector = el.id ? `#${el.id}` : el.className && typeof el.className === 'string' ? `.${el.className.trim().split(/\s+/).filter(Boolean).join('.')}` : null;
+        if(selector) {
+            try {
+                if (doc.querySelectorAll(selector).length === 1) {
+                    scores.set(selector, score);
                 }
-            }
-            
-            if (selector) {
-                try {
-                    if (doc.querySelectorAll(selector).length === 1) {
-                        scores.set(selector, (scores.get(selector) || 0) + textLength);
-                    }
-                } catch (e) { /* Invalid selector */ }
-            }
+            } catch(e) {}
         }
+      }
     });
 
-    const suggestions = [...scores.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(entry => entry[0]);
+    const sortedCandidates = [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(entry => entry[0]);
 
-    return Array.from(new Set([...commonSelectors.filter(s => scores.has(s)), ...suggestions])).slice(0, 10);
+    const suggestions = new Set<string>(['#content', '.content', '.chapter-content', 'article', ...sortedCandidates]);
+    return Array.from(suggestions).slice(0, 5);
 
   } catch (error) {
     console.error('Error scraping for suggestions:', error);
@@ -85,7 +88,6 @@ export const scrapeChapter = async (
   selector: string
 ): Promise<ScrapedChapter> => {
   const nextLinkSelectors = [
-      "a:contains('下一章')",
       "a:contains('Next Chapter')",
       "a:contains('next chapter')",
       "a:contains('Next')",
@@ -95,10 +97,11 @@ export const scrapeChapter = async (
       "a.nav-next",
       "a#next_chap",
       "a.btn-next",
+      "a:contains('下一章')",
+      "a:contains('下章')",
   ].join(', ');
   
   const prevLinkSelectors = [
-      "a:contains('上一章')",
       "a:contains('Previous Chapter')",
       "a:contains('previous chapter')",
       "a:contains('Previous')",
@@ -108,20 +111,35 @@ export const scrapeChapter = async (
       "a.nav-previous",
       "a#prev_chap",
       "a.btn-prev",
+      "a:contains('上一章')",
+      "a:contains('上章')",
   ].join(', ');
   
   const onPageTitleSelectors = [
-      'h1',
-      'h2',
+      `${selector} h1`,
+      `${selector} h2`,
+      `${selector} h3`,
       '.chapter-title',
       '#chapter-title',
-      '.entry-title',
+      '.content-title',
+  ].join(', ');
+
+  const chapterNumberHintSelectors = [
+      "div:contains('分卷阅读')",
+      "span:contains('分卷阅读')",
+      "div:contains('章')",
+      "span:contains('章')",
+      '.page-title',
   ].join(', ');
 
   const extractRules = {
-    documentTitle: 'title',
     onPageTitle: {
         selector: onPageTitleSelectors,
+        output: 'text',
+        type: 'item',
+    },
+    chapterHint: {
+        selector: chapterNumberHintSelectors,
         output: 'text',
         type: 'item',
     },
@@ -172,17 +190,35 @@ export const scrapeChapter = async (
     const content = scrapedData.content || `Content not found with the provided selector ("${selector}"). Please check the selector in the novel's settings.`;
     
     const onPageTitle = scrapedData.onPageTitle?.trim() || '';
+    const chapterHint = scrapedData.chapterHint?.trim() || '';
     
     let chapterNumber: number | null = null;
-    const titleMatch = onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || onPageTitle.match(/(\d+)(?!.*\d)/);
-
-    if (titleMatch) {
-        chapterNumber = parseInt(titleMatch[1] || titleMatch[0], 10);
+    
+    let hintMatch = chapterHint.match(/分卷阅读\s*(\d+)/) || 
+                      chapterHint.match(/第\s*(\d+)\s*章/);
+    
+    if (hintMatch) {
+        chapterNumber = parseInt(hintMatch[1], 10);
     }
     
-    const finalTitle = chapterNumber 
-        ? `Chapter ${chapterNumber}` 
-        : (onPageTitle || scrapedData.documentTitle || 'Unknown Chapter');
+    if (!chapterNumber) {
+        let titleMatch = onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || 
+                           onPageTitle.match(/第\s*(\d+)\s*章/);
+                           
+        if (titleMatch) {
+            chapterNumber = parseInt(titleMatch[1], 10);
+        }
+    }
+    
+    if (!chapterNumber) {
+        const urlMatch = url.match(/\/(\d+)\.html/i) || 
+                         url.match(/\/(\d+)\/?$/i);
+        if (urlMatch) {
+            chapterNumber = parseInt(urlMatch[1], 10);
+        }
+    }
+    
+    const finalTitle = onPageTitle || "Unknown Chapter"; 
 
     return {
       title: finalTitle,
@@ -200,4 +236,5 @@ export const scrapeChapter = async (
     throw new Error('An unknown error occurred while scraping the chapter.');
   }
 };
+
 
