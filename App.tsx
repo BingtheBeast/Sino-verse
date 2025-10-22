@@ -164,12 +164,12 @@ function App() {
       {renderContent()}
       <NewNovelModal
         isOpen={isNewNovelModalOpen}
-        onClose={() (false)}
+        onClose={() => setIsNewNovelModalOpen(false)}
         onAddNovel={handleAddNovel}
       />
       <SettingsModal
         isOpen={isSettingsModalOpen}
-        onClose={() (false)}
+        onClose={() => setIsSettingsModalOpen(false)}
         novel={novelForSettings}
         onSave={handleSaveSettings}
       />
@@ -178,3 +178,4 @@ function App() {
 }
 
 export default App;
+
