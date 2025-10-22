@@ -43,10 +43,13 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
   }, [chapterTitle]);
 
   const displayTitle = chapterNumber ? `Chapter ${chapterNumber}` : chapterTitle;
-
+  
   return (
     <div className="flex flex-col h-full bg-[--app-bg]">
-      <header className="flex items-center p-4 border-b border-[--border-color] sticky top-0 bg-[--app-bg]/80 backdrop-blur-sm z-10">
+      <header 
+        className="flex items-center p-4 border-b border-[--border-color] sticky top-0 bg-[--app-bg]/80 backdrop-blur-sm z-10
+                   pt-[calc(1rem+env(safe-area-inset-top))]"
+      >
         <button onClick={onHome} className="p-2 rounded-full hover:bg-[--hover-bg]" aria-label="Return to Home Screen">
           <HomeIcon className="w-6 h-6 text-[--text-color]" />
         </button>
@@ -54,7 +57,11 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
         <div className="w-10"></div>
       </header>
       
-      <main ref={scrollRef} className="flex-1 overflow-y-auto p-6 md:p-8">
+      <main 
+        ref={scrollRef} 
+        className="flex-1 overflow-y-auto p-6 md:p-8 
+                   scroll-pt-16 scroll-pb-20"
+      >
         <div 
           className="prose dark:prose-invert max-w-3xl mx-auto text-[--text-color] leading-relaxed whitespace-pre-wrap"
         >
@@ -62,7 +69,10 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
         </div>
       </main>
 
-      <footer className="p-4 border-t border-[--border-color] flex justify-between items-center sticky bottom-0 bg-[--app-bg]/80 backdrop-blur-sm z-10">
+      <footer 
+        className="p-4 border-t border-[--border-color] flex justify-between items-center sticky bottom-0 bg-[--app-bg]/80 backdrop-blur-sm z-10
+                   pb-[calc(1rem+env(safe-area-inset-bottom))]"
+      >
         <button
           onClick={() => prevUrl && onNavigate(prevUrl, 'prev')}
           disabled={!prevUrl || isNavigating}
@@ -83,4 +93,3 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
 };
 
 export default ReaderScreen;
-
