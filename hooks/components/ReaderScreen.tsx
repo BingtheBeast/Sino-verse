@@ -7,7 +7,7 @@ interface ReaderScreenProps {
   chapterTitle: string;
   chapterNumber: number | null;
   onHome: () => void;
-  onNavigate: (url: string, direction: 'next' | 'prev') => void;
+  onNavigate: (url: string, direction: 'next' | 'prev')T => void;
   nextUrl: string | null;
   prevUrl: string | null;
   isNavigating: boolean;
@@ -30,7 +30,6 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
   useEffect(() => {
     if (scrollRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        // Only autoscroll if user is already near the bottom
         if (scrollHeight - scrollTop < clientHeight + 200) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
@@ -43,7 +42,7 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
     }
   }, [chapterTitle]);
 
-  const displayTitle = chapterNumber ? `Chapter ${chapterNumber}` : chapterTitle;
+  const displayTitle = chapterTitle;
 
   return (
     <div className="flex flex-col h-full bg-[--app-bg]">
