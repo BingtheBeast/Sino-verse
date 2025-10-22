@@ -1,11 +1,11 @@
-import { GoogleGenerativeAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT } from '../constants';
 import { Novel } from "../types";
 
 const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const geminiApiKey = import.meta.env.VITE_API_KEY;
 
-const geminiAi = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 const GEMINI_MODEL = 'gemini-1.5-flash-latest';
 const GROQ_MODEL = 'llama3-8b-8192';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -17,17 +17,16 @@ async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGene
         const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
         const finalPrompt = basePrompt.replace('{{GLOSSARY}}', novel.customGlossary || '');
         
-        const generativeModel = geminiAi.getGenerativeModel({ model: GEMINI_MODEL });
-        const chat = generativeModel.startChat({
-            history: [
+        const response = await geminiAi.models.generateContentStream({
+            model: GEMINI_MODEL,
+            contents: [
                 { role: 'user', parts: [{ text: finalPrompt }] },
-                { role: 'model', parts: [{ text: 'Understood. I will follow all directives. Provide the text to translate.' }] }
-            ]
+                { role: 'model', parts: [{ text: 'Understood. I will follow all directives. Provide the text to translate.' }] },
+                { role: 'user', parts: [{ text }] }
+            ],
         });
 
-        const result = await chat.sendMessageStream(text);
-
-        for await (const chunk of result.stream) {
+        for await (const chunk of response) {
             const chunkText = chunk.text();
             if (chunkText) {
                 yield chunkText;
@@ -46,8 +45,10 @@ async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chin
         const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
         const prompt = GLOSSARY_SUGGESTION_PROMPT.replace('{{CONTEXT}}', context).replace(/{{LANGUAGE_NAME}}/g, languageName);
         
-        const generativeModel = geminiAi.getGenerativeModel({ model: GEMINI_MODEL });
-        const result = await generativeModel.generateContent(prompt);
+        const result = await geminiAi.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
         
         const response = result.response;
         return response.text();
