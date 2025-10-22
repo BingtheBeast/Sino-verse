@@ -27,7 +27,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
       setAiProvider(novel.aiProvider || 'gemini');
     }
     if (isOpen) {
-        // Focus the glossary input when the modal opens
         setTimeout(() => glossaryRef.current?.focus(), 100);
     }
   }, [novel, isOpen]);
@@ -58,7 +57,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
           const newContent = `${prev}\n\n# --- AI Suggestions ---\n${suggestions}`.trim();
           setSuggestions('');
           setContext('');
-          // Scroll to the bottom of the textarea after appending
           setTimeout(() => {
               if (glossaryRef.current) {
                   glossaryRef.current.scrollTop = glossaryRef.current.scrollHeight;
@@ -90,7 +88,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
               </select>
             </div>
             <div>
-                <label htmlFor="customGlossary" className="block text-sm font-medium text-[--status-text] mb-1">Custom Glossary</label>
+                <label htmlFor="customGlossary" className="block text-sm font-medium text-[--status-text] mb-1">
+                  Custom Glossary (Built-in glossary will override conflicting terms)
+                </label>
                 <textarea
                     id="customGlossary"
                     ref={glossaryRef}
