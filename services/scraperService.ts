@@ -85,6 +85,7 @@ export const scrapeChapter = async (
   selector: string
 ): Promise<ScrapedChapter> => {
   const nextLinkSelectors = [
+      "a:contains('下一章')",
       "a:contains('Next Chapter')",
       "a:contains('next chapter')",
       "a:contains('Next')",
@@ -97,6 +98,7 @@ export const scrapeChapter = async (
   ].join(', ');
   
   const prevLinkSelectors = [
+      "a:contains('上一章')",
       "a:contains('Previous Chapter')",
       "a:contains('previous chapter')",
       "a:contains('Previous')",
@@ -173,12 +175,9 @@ export const scrapeChapter = async (
     
     let chapterNumber: number | null = null;
     const titleMatch = onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || onPageTitle.match(/(\d+)(?!.*\d)/);
-    const urlMatch = url.match(/chapter[_-]?(\d+)/i) || url.match(/\/(\d+)\/?$/) || url.match(/(\d+)(?!.*\d)/);
 
     if (titleMatch) {
         chapterNumber = parseInt(titleMatch[1] || titleMatch[0], 10);
-    } else if (urlMatch) {
-        chapterNumber = parseInt(urlMatch[1] || urlMatch[0], 10);
     }
     
     const finalTitle = chapterNumber 
@@ -201,3 +200,4 @@ export const scrapeChapter = async (
     throw new Error('An unknown error occurred while scraping the chapter.');
   }
 };
+
