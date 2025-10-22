@@ -42,7 +42,7 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
     }
   }, [chapterTitle]);
 
-  const displayTitle = chapterTitle;
+  const displayTitle = chapterNumber ? `Chapter ${chapterNumber}` : chapterTitle;
 
   return (
     <div className="flex flex-col h-full bg-[--app-bg]">
