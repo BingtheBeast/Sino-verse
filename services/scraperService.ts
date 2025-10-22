@@ -1,23 +1,6 @@
 import { ScrapedChapter } from '../types';
 
-const getElementSelector = (el: Element): string | null => {
-  if (el.id) {
-    const selector = `#${el.id}`;
-    try {
-      if (document.querySelector(selector) === el) return selector;
-    } catch (e) {}
-  }
-  if (el.className && typeof el.className === 'string') {
-    const classes = el.className.trim().split(/\s+/).filter(Boolean);
-    if (classes.length > 0) {
-      const selector = `.${classes.join('.')}`;
-       try {
-         if (document.querySelectorAll(selector).length === 1) return selector;
-       } catch (e) {}
-    }
-  }
-  return null;
-}
+const SCRAPINGBEE_API_URL = 'https://app.scrapingbee.com/api/v1/';
 
 export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
   console.log('Actively scraping for selector suggestions at:', url);
@@ -47,64 +30,46 @@ export const getSelectorSuggestions = async (url: string): Promise<string[]> => 
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    const scores = new Map<Element, number>();
-    const forbiddenTags = new Set(['NAV', 'HEADER', 'FOOTER', 'ASIDE', 'SCRIPT', 'STYLE', 'FORM', 'BUTTON', 'A', 'UL', 'LI', 'IFRAME']);
-
-    doc.body.querySelectorAll('*').forEach(el => {
-      if (forbiddenTags.has(el.tagName.toUpperCase())) return;
-
-      let parent = el.parentElement;
-      let isChildOfForbidden = false;
-      while(parent && parent !== doc.body) {
-        if (forbiddenTags.has(parent.tagName.toUpperCase())) {
-          isChildOfForbidden = true;
-          break;
-        }
-        parent = parent.parentElement;
-      }
-      if (isChildOfForbidden) return;
-
-      let directTextLength = 0;
-      el.childNodes.forEach(node => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          directTextLength += node.textContent?.trim().length || 0;
-        }
-      });
-
-      if (directTextLength < 100) return;
-      
-      const pCount = el.querySelectorAll('p').length;
-      const linkCount = el.querySelectorAll('a').length;
-
-      let score = (directTextLength * 1.5) + (pCount * 50) - (linkCount * 20);
-      if (el.children.length > pCount + 10) {
-          score -= el.children.length * 5;
-      }
-
-      if (score > 100) { 
-        scores.set(el, score);
-      }
-    });
-
-    const sortedCandidates = [...scores.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(entry => entry[0]);
-
-    const suggestions = new Set<string>();
-    suggestions.add('#content');
-    suggestions.add('.content');
-    suggestions.add('.chapter-content');
-    suggestions.add('article');
-
-    sortedCandidates.forEach(el => {
-      const selector = getElementSelector(el);
-      if (selector) {
-        suggestions.add(selector);
-      }
-    });
+    const scores = new Map<string, number>();
+    const commonSelectors = [
+        '#content', '.content', '#chapter-content', '.chapter-content', 
+        'article', '.entry-content', '.main-content', '#text', '.text'
+    ];
     
-    return Array.from(suggestions);
+    commonSelectors.forEach(selector => {
+        if (doc.querySelector(selector)) {
+            scores.set(selector, 100); 
+        }
+    });
+
+    doc.querySelectorAll('*').forEach(el => {
+        const textLength = el.textContent?.trim().length || 0;
+        if (textLength > 200 && el.children.length < 5) {
+            let selector: string | null = null;
+            if (el.id) {
+                selector = `#${el.id}`;
+            } else if (el.className && typeof el.className === 'string') {
+                const classes = el.className.trim().split(/\s+/).filter(Boolean);
+                if (classes.length > 0) {
+                    selector = `.${classes.join('.')}`;
+                }
+            }
+            
+            if (selector) {
+                try {
+                    if (doc.querySelectorAll(selector).length === 1) {
+                        scores.set(selector, (scores.get(selector) || 0) + textLength);
+                    }
+                } catch (e) { /* Invalid selector */ }
+            }
+        }
+    });
+
+    const suggestions = [...scores.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(entry => entry[0]);
+
+    return Array.from(new Set([...commonSelectors.filter(s => scores.has(s)), ...suggestions])).slice(0, 10);
 
   } catch (error) {
     console.error('Error scraping for suggestions:', error);
@@ -114,8 +79,6 @@ export const getSelectorSuggestions = async (url: string): Promise<string[]> => 
     throw new Error('An unknown error occurred while getting suggestions.');
   }
 };
-
-const SCRAPINGBEE_API_URL = 'https://app.scrapingbee.com/api/v1/';
 
 export const scrapeChapter = async (
   url: string,
@@ -206,13 +169,21 @@ export const scrapeChapter = async (
 
     const content = scrapedData.content || `Content not found with the provided selector ("${selector}"). Please check the selector in the novel's settings.`;
     
-    const chapterNumberMatch = url.match(/chapter[_-]?(\d+)/i) || url.match(/\/(\d+)\/?$/) || url.match(/(\d+)(?!.*\d)/);
-    const chapterNumber = chapterNumberMatch ? parseInt(chapterNumberMatch[1] || chapterNumberMatch[0], 10) : null;
+    const onPageTitle = scrapedData.onPageTitle?.trim() || '';
     
-    const finalTitle = scrapedData.onPageTitle?.trim() 
-        || (chapterNumber ? `Chapter ${chapterNumber}` : null) 
-        || scrapedData.documentTitle 
-        || 'Unknown Chapter';
+    let chapterNumber: number | null = null;
+    const titleMatch = onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || onPageTitle.match(/(\d+)(?!.*\d)/);
+    const urlMatch = url.match(/chapter[_-]?(\d+)/i) || url.match(/\/(\d+)\/?$/) || url.match(/(\d+)(?!.*\d)/);
+
+    if (titleMatch) {
+        chapterNumber = parseInt(titleMatch[1] || titleMatch[0], 10);
+    } else if (urlMatch) {
+        chapterNumber = parseInt(urlMatch[1] || urlMatch[0], 10);
+    }
+    
+    const finalTitle = chapterNumber 
+        ? `Chapter ${chapterNumber}` 
+        : (onPageTitle || scrapedData.documentTitle || 'Unknown Chapter');
 
     return {
       title: finalTitle,
@@ -230,4 +201,3 @@ export const scrapeChapter = async (
     throw new Error('An unknown error occurred while scraping the chapter.');
   }
 };
-
