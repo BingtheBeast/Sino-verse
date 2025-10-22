@@ -1,0 +1,5 @@
+{
+  "name": "AI Novel Translator",
+  "description": "A personal AI-powered reading assistant to translate web novel chapters from a URL into English. Features customizable glossaries, settings persistence, and a streamlined reading interface.",
+  "requestFramePermissions": []
+}
