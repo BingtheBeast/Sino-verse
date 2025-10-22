@@ -131,7 +131,7 @@ export const scrapeChapter = async (
       "a.nav-next",
       "a#next_chap",
       "a.btn-next",
-  ];
+  ].join(', ');
   
   const prevLinkSelectors = [
       "a:contains('Previous Chapter')",
@@ -143,7 +143,7 @@ export const scrapeChapter = async (
       "a.nav-previous",
       "a#prev_chap",
       "a.btn-prev",
-  ];
+  ].join(', ');
   
   const onPageTitleSelectors = [
       'h1',
@@ -151,7 +151,7 @@ export const scrapeChapter = async (
       '.chapter-title',
       '#chapter-title',
       '.entry-title',
-  ];
+  ].join(', ');
 
   const extractRules = {
     documentTitle: 'title',
