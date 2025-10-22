@@ -1,13 +1,118 @@
 import { ScrapedChapter } from '../types';
 
-export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
-  console.log('Fetching selector suggestions for:', url);
-  await new Promise(res => setTimeout(res, 1000));
+const getElementSelector = (el: Element): string | null => {
+  if (el.id) {
+    const selector = `#${el.id}`;
+    try {
+      if (document.querySelector(selector) === el) return selector;
+    } catch (e) {}
+  }
+  if (el.className && typeof el.className === 'string') {
+    const classes = el.className.trim().split(/\s+/).filter(Boolean);
+    if (classes.length > 0) {
+      const selector = `.${classes.join('.')}`;
+       try {
+         if (document.querySelectorAll(selector).length === 1) return selector;
+       } catch (e) {}
+    }
+  }
+  return null;
+}
 
+export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
+  console.log('Actively scraping for selector suggestions at:', url);
   if (!url || !url.startsWith('http')) {
       throw new Error('Please enter a valid URL.');
   }
-  return ['#content', '.chapter-content', 'article.post', '.main-content'];
+
+  const apiKey = import.meta.env.VITE_SCRAPINGBEE_API_KEY;
+  if (!apiKey) {
+      throw new Error("ScrapingBee API key (VITE_SCRAPINGBEE_API_KEY) is not configured.");
+  }
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: url,
+    render_js: 'false',
+  });
+
+  try {
+    const response = await fetch(`${SCRAPINGBEE_API_URL}?${params.toString()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Scraping for suggestions failed: ${response.status} ${response.statusText}. ${errorText}`);
+    }
+
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const scores = new Map<Element, number>();
+    const forbiddenTags = new Set(['NAV', 'HEADER', 'FOOTER', 'ASIDE', 'SCRIPT', 'STYLE', 'FORM', 'BUTTON', 'A', 'UL', 'LI', 'IFRAME']);
+
+    doc.body.querySelectorAll('*').forEach(el => {
+      if (forbiddenTags.has(el.tagName.toUpperCase())) return;
+
+      let parent = el.parentElement;
+      let isChildOfForbidden = false;
+      while(parent && parent !== doc.body) {
+        if (forbiddenTags.has(parent.tagName.toUpperCase())) {
+          isChildOfForbidden = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      if (isChildOfForbidden) return;
+
+      let directTextLength = 0;
+      el.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          directTextLength += node.textContent?.trim().length || 0;
+        }
+      });
+
+      if (directTextLength < 100) return;
+      
+      const pCount = el.querySelectorAll('p').length;
+      const linkCount = el.querySelectorAll('a').length;
+
+      let score = (directTextLength * 1.5) + (pCount * 50) - (linkCount * 20);
+      if (el.children.length > pCount + 10) {
+          score -= el.children.length * 5;
+      }
+
+      if (score > 100) { 
+        scores.set(el, score);
+      }
+    });
+
+    const sortedCandidates = [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(entry => entry[0]);
+
+    const suggestions = new Set<string>();
+    suggestions.add('#content');
+    suggestions.add('.content');
+    suggestions.add('.chapter-content');
+    suggestions.add('article');
+
+    sortedCandidates.forEach(el => {
+      const selector = getElementSelector(el);
+      if (selector) {
+        suggestions.add(selector);
+      }
+    });
+    
+    return Array.from(suggestions);
+
+  } catch (error) {
+    console.error('Error scraping for suggestions:', error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to get suggestions. Reason: ${error.message}. Try entering a selector manually.`);
+    }
+    throw new Error('An unknown error occurred while getting suggestions.');
+  }
 };
 
 const SCRAPINGBEE_API_URL = 'https://app.scrapingbee.com/api/v1/';
@@ -46,12 +151,12 @@ export const scrapeChapter = async (
     nextUrl: {
       selector: nextLinkSelectors,
       output: '@href',
-      type: 'first',
+      type: 'item',
     },
     prevUrl: {
       selector: prevLinkSelectors,
       output: '@href',
-      type: 'first',
+      type: 'item',
     },
   };
   
