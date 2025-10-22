@@ -15,7 +15,7 @@ const getCombinedGlossary = (novel: Novel): string => {
     ? DEFAULT_CHINESE_GLOSSARY
     : DEFAULT_KOREAN_GLOSSARY;
   
-  return `${defaultGlossary}\n\n# --- User's Custom Terms --- \n${novel.customGlossary || ''}`.trim();
+  return `# --- User's Custom Terms --- \n${novel.customGlossary || ''}\n\n# --- Default Glossary --- \n${defaultGlossary}`.trim();
 };
 
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
