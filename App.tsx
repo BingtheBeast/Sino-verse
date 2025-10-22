@@ -46,6 +46,12 @@ function App() {
       setCurrentChapter(chapterData);
       setCurrentNovel(novel);
       
+      setNovels(prevNovels => 
+        prevNovels.map(n => 
+          n.id === novel.id ? { ...n, url: url } : n
+        )
+      );
+      
       setAppState('reader');
 
       const stream = translateTextStream(chapterData.content, novel);
@@ -61,7 +67,7 @@ function App() {
     } catch (e) {
       handleError(e, `Failed to fetch or translate chapter from ${url}`);
     }
-  }, [handleError]);
+  }, [handleError, setNovels]);
 
   const handleSelectNovel = (novel: Novel) => {
     fetchAndTranslateChapter(novel, novel.url);
