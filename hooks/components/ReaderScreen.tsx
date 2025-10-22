@@ -7,7 +7,7 @@ interface ReaderScreenProps {
   chapterTitle: string;
   chapterNumber: number | null;
   onHome: () => void;
-  onNavigate: (url: string, direction: 'next' | 'prev')T => void;
+  onNavigate: (url: string, direction: 'next' | 'prev') => void;
   nextUrl: string | null;
   prevUrl: string | null;
   isNavigating: boolean;
@@ -83,3 +83,4 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
 };
 
 export default ReaderScreen;
+
