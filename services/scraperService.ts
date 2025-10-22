@@ -1,20 +1,9 @@
 import { ScrapedChapter } from '../types';
 
-/**
- * NOTE: Direct web scraping from the browser is blocked by CORS policy.
- * This service uses the ScrapingBee API to fetch and parse chapter content from a given URL.
- * 
- * The `getSelectorSuggestions` function remains a mock for demonstration purposes,
- * as suggesting selectors automatically is a complex task beyond a simple API call.
- */
-
 export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
   console.log('Fetching selector suggestions for:', url);
-  // Simulate network delay
   await new Promise(res => setTimeout(res, 1000));
 
-  // Mocked response: In a real app, a backend would analyze the page
-  // and suggest valid CSS selectors.
   if (!url || !url.startsWith('http')) {
       throw new Error('Please enter a valid URL.');
   }
@@ -27,7 +16,6 @@ export const scrapeChapter = async (
   url: string,
   selector: string
 ): Promise<ScrapedChapter> => {
-  // A comprehensive list of common selectors for next/previous links.
   const nextLinkSelectors = [
       "a:contains('Next Chapter')",
       "a:contains('next chapter')",
@@ -67,9 +55,9 @@ export const scrapeChapter = async (
     },
   };
   
-  const apiKey = (process as any).env.SCRAPINGBEE_API_KEY;
+  const apiKey = import.meta.env.VITE_SCRAPINGBEE_API_KEY;
   if (!apiKey) {
-      throw new Error("ScrapingBee API key (SCRAPINGBEE_API_KEY) is not configured in environment variables.");
+      throw new Error("ScrapingBee API key (VITE_SCRAPINGBEE_API_KEY) is not configured in environment variables.");
   }
 
   const params = new URLSearchParams({
@@ -119,3 +107,4 @@ export const scrapeChapter = async (
     throw new Error('An unknown error occurred while scraping the chapter.');
   }
 };
+
