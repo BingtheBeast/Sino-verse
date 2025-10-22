@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT } from '../constants';
+import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT, DEFAULT_CHINESE_GLOSSARY, DEFAULT_KOREAN_GLOSSARY } from '../constants';
 import { Novel } from "../types";
 
 const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
@@ -10,18 +10,27 @@ const GEMINI_MODEL = 'gemini-pro';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
+const getCombinedGlossary = (novel: Novel): string => {
+  const defaultGlossary = novel.sourceLanguage === 'chinese'
+    ? DEFAULT_CHINESE_GLOSSARY
+    : DEFAULT_KOREAN_GLOSSARY;
+  
+  return `${defaultGlossary}\n\n# --- User's Custom Terms --- \n${novel.customGlossary || ''}`.trim();
+};
+
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
     
     try {
         const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
-        const finalPrompt = basePrompt.replace('{{GLOSSARY}}', novel.customGlossary || '');
+        const combinedGlossary = getCombinedGlossary(novel);
+        const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
         
         const response = await geminiAi.models.generateContentStream({
             model: GEMINI_MODEL,
             contents: [
                 { role: 'user', parts: [{ text: finalPrompt }] },
-                { role: 'model', parts: [{ text: 'Understood. I will follow all directives. Provide the text to translate.' }] },
+                { role: 'model', parts: [{ text: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' }] },
                 { role: 'user', parts: [{ text }] }
             ],
         });
@@ -62,12 +71,14 @@ async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenera
     if (!groqApiKey) throw new Error("Groq API key (VITE_GROQ_API_KEY) is not configured in environment variables.");
     
     const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
-    const finalPrompt = basePrompt.replace('{{GLOSSARY}}', novel.customGlossary || '');
+    const combinedGlossary = getCombinedGlossary(novel);
+    const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
 
     const body = JSON.stringify({
         model: GROQ_MODEL,
         messages: [
-            { role: 'system', content: finalPrompt },
+            { role: 'user', content: finalPrompt },
+            { role: 'model', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
             { role: 'user', content: text }
         ],
         stream: true,
