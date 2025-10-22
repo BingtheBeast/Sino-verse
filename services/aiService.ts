@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/genai";
 import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT } from '../constants';
 import { Novel } from "../types";
 
