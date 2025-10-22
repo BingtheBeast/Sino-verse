@@ -6,8 +6,8 @@ const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const geminiApiKey = import.meta.env.VITE_API_KEY;
 
 const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-const GEMINI_MODEL = 'gemini-1.5-flash-latest';
-const GROQ_MODEL = 'llama3-8b-8192';
+const GEMINI_MODEL = 'gemini-1.5-flash';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
