@@ -83,9 +83,7 @@ function App() {
   };
 
   const handleDeleteNovel = (novelId: string) => {
-    if (window.confirm('Are you sure you want to delete this novel?')) {
-      setNovels(prev => prev.filter(n => n.id !== novelId));
-    }
+    setNovels(prev => prev.filter(n => n.id !== novelId));
   };
   
   const handleOpenSettings = (novel: Novel) => {
@@ -131,7 +129,7 @@ function App() {
             />
           );
         }
-        return null; // Should not happen
+        return null;
       case 'error':
         return (
           <div className="flex flex-col items-center justify-center h-full bg-[--app-bg] p-4 text-center">
@@ -166,12 +164,12 @@ function App() {
       {renderContent()}
       <NewNovelModal
         isOpen={isNewNovelModalOpen}
-        onClose={() => setIsNewNovelModalOpen(false)}
+        onClose={() (false)}
         onAddNovel={handleAddNovel}
       />
       <SettingsModal
         isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+        onClose={() (false)}
         novel={novelForSettings}
         onSave={handleSaveSettings}
       />
