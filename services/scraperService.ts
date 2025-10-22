@@ -116,30 +116,24 @@ export const scrapeChapter = async (
   ].join(', ');
   
   const onPageTitleSelectors = [
+      '.chapter-title',
+      '#chapter-title',
+      "*:contains('分卷阅读')",
+      "*:contains('Chapter ')",
+      "*:contains('CHAPTER ')",
+      "*:contains('第')",
       `${selector} h1`,
       `${selector} h2`,
       `${selector} h3`,
-      '.chapter-title',
-      '#chapter-title',
       '.content-title',
-  ].join(', ');
-
-  const chapterNumberHintSelectors = [
-      "div:contains('分卷阅读')",
-      "span:contains('分卷阅读')",
-      "div:contains('章')",
-      "span:contains('章')",
-      '.page-title',
+      '.entry-title',
+      'h1',
+      'h2'
   ].join(', ');
 
   const extractRules = {
     onPageTitle: {
         selector: onPageTitleSelectors,
-        output: 'text',
-        type: 'item',
-    },
-    chapterHint: {
-        selector: chapterNumberHintSelectors,
         output: 'text',
         type: 'item',
     },
@@ -190,29 +184,21 @@ export const scrapeChapter = async (
     const content = scrapedData.content || `Content not found with the provided selector ("${selector}"). Please check the selector in the novel's settings.`;
     
     const onPageTitle = scrapedData.onPageTitle?.trim() || '';
-    const chapterHint = scrapedData.chapterHint?.trim() || '';
     
     let chapterNumber: number | null = null;
     
-    let hintMatch = chapterHint.match(/分卷阅读\s*(\d+)/) || 
-                      chapterHint.match(/第\s*(\d+)\s*章/);
+    let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) || 
+                       onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || 
+                       onPageTitle.match(/第\s*(\d+)\s*章/);
     
-    if (hintMatch) {
-        chapterNumber = parseInt(hintMatch[1], 10);
-    }
-    
-    if (!chapterNumber) {
-        let titleMatch = onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || 
-                           onPageTitle.match(/第\s*(\d+)\s*章/);
-                           
-        if (titleMatch) {
-            chapterNumber = parseInt(titleMatch[1], 10);
-        }
+    if (titleMatch) {
+        chapterNumber = parseInt(titleMatch[1], 10);
     }
     
     if (!chapterNumber) {
         const urlMatch = url.match(/\/(\d+)\.html/i) || 
-                         url.match(/\/(\d+)\/?$/i);
+                         url.match(/\/(\d+)\/?$/i) ||
+                         url.match(/chapter[_-]?(\d+)/i);
         if (urlMatch) {
             chapterNumber = parseInt(urlMatch[1], 10);
         }
@@ -236,5 +222,4 @@ export const scrapeChapter = async (
     throw new Error('An unknown error occurred while scraping the chapter.');
   }
 };
-
 
