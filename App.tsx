@@ -77,7 +77,10 @@ function App() {
     if (!currentNovel) return;
     setIsNavigating(true);
     setNavigatingDirection(direction);
-    await fetchAndTranslateChapter(currentNovel, url);
+    
+    const novelToUse = novels.find(n => n.id === currentNovel.id) || currentNovel;
+    
+    await fetchAndTranslateChapter(novelToUse, url);
     setIsNavigating(false);
     setNavigatingDirection(null);
   };
@@ -98,7 +101,21 @@ function App() {
   };
 
   const handleSaveSettings = (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' }) => {
-    setNovels(prev => prev.map(n => n.id === novelId ? { ...n, ...settings } : n));
+    let updatedNovel: Novel | null = null;
+    setNovels(prev => 
+      prev.map(n => {
+        if (n.id === novelId) {
+          updatedNovel = { ...n, ...settings };
+          return updatedNovel;
+        }
+        return n;
+      })
+    );
+    
+    if (currentNovel && currentNovel.id === novelId && updatedNovel) {
+      setCurrentNovel(updatedNovel);
+    }
+    
     setIsSettingsModalOpen(false);
   };
 
