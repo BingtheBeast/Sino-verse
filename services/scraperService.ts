@@ -131,7 +131,7 @@ export const scrapeChapter = async (
       "a.nav-next",
       "a#next_chap",
       "a.btn-next",
-  ].join(', ');
+  ];
   
   const prevLinkSelectors = [
       "a:contains('Previous Chapter')",
@@ -143,10 +143,23 @@ export const scrapeChapter = async (
       "a.nav-previous",
       "a#prev_chap",
       "a.btn-prev",
-  ].join(', ');
+  ];
+  
+  const onPageTitleSelectors = [
+      'h1',
+      'h2',
+      '.chapter-title',
+      '#chapter-title',
+      '.entry-title',
+  ];
 
   const extractRules = {
-    title: 'title',
+    documentTitle: 'title',
+    onPageTitle: {
+        selector: onPageTitleSelectors,
+        output: 'text',
+        type: 'item',
+    },
     content: selector,
     nextUrl: {
       selector: nextLinkSelectors,
@@ -196,8 +209,13 @@ export const scrapeChapter = async (
     const chapterNumberMatch = url.match(/chapter[_-]?(\d+)/i) || url.match(/\/(\d+)\/?$/) || url.match(/(\d+)(?!.*\d)/);
     const chapterNumber = chapterNumberMatch ? parseInt(chapterNumberMatch[1] || chapterNumberMatch[0], 10) : null;
     
+    const finalTitle = scrapedData.onPageTitle?.trim() 
+        || (chapterNumber ? `Chapter ${chapterNumber}` : null) 
+        || scrapedData.documentTitle 
+        || 'Unknown Chapter';
+
     return {
-      title: scrapedData.title || `Chapter ${chapterNumber || 'Unknown'}`,
+      title: finalTitle,
       chapterNumber,
       content,
       nextUrl: resolveUrl(scrapedData.nextUrl),
