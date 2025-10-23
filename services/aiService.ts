@@ -210,7 +210,7 @@ async function* translateWithDeepseekStream(text: string, novel: Novel): AsyncGe
         stream: true,
     });
     // Replace with your actual site URL and name
-    const siteUrl = 'https://your-app-name.vercel.app';
+    const siteUrl = 'https://sino-verse.vercel.app/';
     const siteName = 'SinoVerse Novel Translator';
 
     const response = await fetch(OPENROUTER_API_URL, {
