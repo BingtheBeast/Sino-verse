@@ -1,11 +1,11 @@
 export type Novel = {
   id: string;
   title: string;
-  url: string; 
+  url: string;
   selector: string;
   sourceLanguage: 'chinese' | 'korean';
   customGlossary: string;
-  aiProvider: 'gemini' | 'groq';
+  aiProvider: 'gemini' | 'groq' | 'deepseek'; // Added 'deepseek'
 };
 
 export type ScrapedChapter = {
