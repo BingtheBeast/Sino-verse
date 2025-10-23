@@ -1,11 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT, DEFAULT_CHINESE_GLOSSARY, DEFAULT_KOREAN_GLOSSARY } from '../constants';
 import { Novel } from "../types";
 
 const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Use new GoogleGenAI({ apiKey: ... }) syntax consistent with @google/genai CDN
 const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 const GEMINI_MODEL = 'gemini-pro-latest';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
@@ -15,7 +14,6 @@ const getCombinedGlossary = (novel: Novel): string => {
   const defaultGlossary = novel.sourceLanguage === 'chinese'
     ? DEFAULT_CHINESE_GLOSSARY
     : DEFAULT_KOREAN_GLOSSARY;
-
   return `# --- User's Custom Terms --- \n${novel.customGlossary || ''}\n\n# --- Default Glossary --- \n${defaultGlossary}`.trim();
 };
 
@@ -23,42 +21,63 @@ async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGene
     if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
 
     try {
-        // --- FIX: Get model first ---
-        const model = geminiAi.getGenerativeModel({ model: GEMINI_MODEL });
         const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
         const combinedGlossary = getCombinedGlossary(novel);
         const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
 
-        // --- FIX: Start chat and send message stream ---
-        const chat = model.startChat({
-            history: [
+        const streamResult = await geminiAi.models.generateContentStream({
+            model: GEMINI_MODEL,
+            contents: [
                 { role: 'user', parts: [{ text: finalPrompt }] },
                 { role: 'model', parts: [{ text: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' }] },
+                { role: 'user', parts: [{ text }] }
             ],
-            // generationConfig: { // Optional: Add safety settings if needed later
-            //   maxOutputTokens: 8192, // Example
-            // },
-            // safetySettings: [ // Optional: Adjust safety if needed later
-            //   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-            //   // ... other categories
+            // safetySettings: [ // Optional: Uncomment and adjust if needed
+            //   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            //   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            //   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            //   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
             // ],
         });
 
-        const result = await chat.sendMessageStream(text);
-
-        // Stream handling remains the same
-        for await (const chunk of result.stream) {
-          try {
-            const chunkText = chunk.text();
-            if (chunkText) {
-                yield chunkText;
-            }
-          } catch (streamError) {
-             console.error('Error processing stream chunk:', streamError);
-             // Decide if you want to throw or just skip the chunk
-             // throw new Error(`Gemini stream processing failed: ${streamError.message}`);
-          }
+        if (streamResult.response && !streamResult.stream) {
+             const response = await streamResult.response;
+             const promptFeedback = response.promptFeedback;
+             if (promptFeedback?.blockReason) {
+                 console.warn("Gemini translation blocked immediately:", promptFeedback.blockReason, promptFeedback.safetyRatings);
+                 throw new Error(`Gemini translation blocked: ${promptFeedback.blockReason}`);
+             }
+             const candidate = response.candidates?.[0];
+              if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+                 console.warn(`Gemini translation finished immediately due to ${candidate.finishReason}. Safety Ratings:`, candidate.safetyRatings);
+                 if (candidate.finishReason === 'SAFETY') {
+                      throw new Error(`Gemini translation blocked due to ${candidate.finishReason}`);
+                 }
+             }
         }
+
+        if (streamResult.stream) {
+            for await (const chunk of streamResult.stream) {
+              try {
+                const chunkFeedback = chunk.promptFeedback;
+                 if (chunkFeedback?.blockReason) {
+                    console.warn("Gemini stream chunk blocked:", chunkFeedback.blockReason, chunkFeedback.safetyRatings);
+                    yield `\n[Translation blocked mid-stream: ${chunkFeedback.blockReason}]\n`;
+                    return;
+                 }
+                const chunkText = chunk.text();
+                if (chunkText) {
+                    yield chunkText;
+                }
+              } catch (streamError) {
+                 console.error('Error processing stream chunk:', streamError);
+              }
+            }
+        } else if (!streamResult.response) {
+            console.error("Gemini translation returned no stream and no initial response.");
+            throw new Error("Gemini translation failed: No response or stream received.");
+        }
+
     } catch (error) {
         console.error('Error translating with Gemini:', error);
          if (error instanceof Error) {
@@ -66,44 +85,68 @@ async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGene
                  console.error('Gemini Error Stack:', error.stack);
             }
         console.error('Raw Gemini Error Object:', JSON.stringify(error, null, 2));
-        throw new Error(`Gemini translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        if (message.includes("blocked")) {
+             throw new Error(`Gemini translation failed: ${message}`);
+        }
+        throw new Error(`Gemini translation failed: ${message}`);
     }
 }
+
 
 async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
     if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
 
     try {
-        // --- FIX: Get model first ---
-        const model = geminiAi.getGenerativeModel({ model: GEMINI_MODEL });
         const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
         const prompt = GLOSSARY_SUGGESTION_PROMPT.replace('{{CONTEXT}}', context).replace(/{{LANGUAGE_NAME}}/g, languageName);
 
-        // --- FIX: Call generateContent on the model object ---
-        const result = await model.generateContent(prompt);
+        const result = await geminiAi.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            // safetySettings: [ // Optional: Uncomment and adjust if needed
+            //   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            // ],
+        });
 
-        // Access response correctly
         const response = result.response;
+
         if (!response) {
           console.error("Gemini glossary generation returned no response object. Full result:", JSON.stringify(result, null, 2));
+          if (result?.promptFeedback?.blockReason) {
+              console.warn("Glossary generation likely blocked:", result.promptFeedback.blockReason);
+              return `# Glossary generation blocked: ${result.promptFeedback.blockReason}`;
+          }
           throw new Error("Gemini glossary generation failed: No response object returned.");
         }
-        
-        // Add check for safety ratings potentially blocking content
-        const safetyRatings = response.promptFeedback?.safetyRatings;
-        if (safetyRatings?.some(rating => rating.blocked)) {
-             console.warn("Gemini glossary generation might be blocked due to safety settings:", response.promptFeedback);
-             // Consider returning a specific message or empty string
-             return "# Glossary generation blocked by safety settings.";
+
+        const promptFeedback = response.promptFeedback;
+        if (promptFeedback?.blockReason) {
+            console.warn("Glossary generation blocked:", promptFeedback.blockReason, promptFeedback.safetyRatings);
+            return `# Glossary generation blocked: ${promptFeedback.blockReason}`;
         }
-        
-        // Access text content
-        const text = response.text();
-        if (text === undefined || text === null) {
-            console.error("Gemini glossary generation response has no text content. Full response:", JSON.stringify(response, null, 2));
-            throw new Error("Gemini glossary generation failed: Response text is missing.");
+        const candidate = response.candidates?.[0];
+        if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+             console.warn(`Glossary generation finished due to ${candidate.finishReason}. Safety Ratings:`, candidate.safetyRatings);
+             if (candidate.finishReason === 'SAFETY') {
+                  return `# Glossary generation blocked due to ${candidate.finishReason}`;
+             }
         }
-        return text;
+
+        try {
+            const text = response.text();
+             if (text === undefined || text === null) {
+                 if (candidate?.finishReason === 'SAFETY' || promptFeedback?.blockReason) {
+                     return `# Glossary generation blocked by safety settings.`;
+                 }
+                 console.error("Gemini glossary generation response has no text content. Full response:", JSON.stringify(response, null, 2));
+                 throw new Error("Gemini glossary generation failed: Response text is missing.");
+             }
+            return text;
+        } catch (e) {
+             console.error("Error calling response.text():", e, "Full response:", JSON.stringify(response, null, 2));
+             throw new Error("Gemini glossary generation failed: Could not extract text from response.");
+        }
 
     } catch (error) {
         console.error('Error generating glossary with Gemini:', error);
@@ -115,6 +158,7 @@ async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chin
         throw new Error(`Gemini glossary generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
+
 
 async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!groqApiKey) throw new Error("Groq API key (VITE_GROQ_API_KEY) is not configured in environment variables.");
@@ -197,7 +241,9 @@ async function generateGlossaryWithGroq(context: string, sourceLanguage: 'chines
 export async function* translateTextStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!text) return;
 
-    switch (novel.aiProvider) {
+    const provider = novel.aiProvider === 'gemini' || novel.aiProvider === 'groq' ? novel.aiProvider : 'gemini';
+
+    switch (provider) {
         case 'gemini':
             yield* translateWithGeminiStream(text, novel);
             break;
@@ -205,8 +251,7 @@ export async function* translateTextStream(text: string, novel: Novel): AsyncGen
             yield* translateWithGroqStream(text, novel);
             break;
         default:
-             console.warn(`Unknown AI provider: ${novel.aiProvider}, defaulting to Gemini.`);
-             // Default to Gemini if provider is somehow invalid
+             console.warn(`Unknown AI provider encountered: ${novel.aiProvider}, defaulting to Gemini.`);
              yield* translateWithGeminiStream(text, novel);
     }
 }
@@ -218,14 +263,15 @@ export const generateGlossarySuggestions = async (
 ): Promise<string> => {
     if (!context) return '';
 
-    switch (provider) {
+    const effectiveProvider = provider === 'gemini' || provider === 'groq' ? provider : 'gemini';
+
+    switch (effectiveProvider) {
         case 'gemini':
             return generateGlossaryWithGemini(context, sourceLanguage);
         case 'groq':
             return generateGlossaryWithGroq(context, sourceLanguage);
         default:
-            console.warn(`Unknown AI provider: ${provider}, defaulting to Gemini.`);
-             // Default to Gemini if provider is somehow invalid
+            console.warn(`Unknown AI provider encountered: ${provider}, defaulting to Gemini.`);
             return generateGlossaryWithGemini(context, sourceLanguage);
     }
 };
