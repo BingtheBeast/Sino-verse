@@ -151,7 +151,7 @@ You will perform a two-step process:
   },
 };
 
-export const GLOSSARY_SUGGESTION_PROMPT = `Analyze the following novel context/synopsis for a {{LANGUAGE_NAME}} web novel. Your goal is to identify key proper nouns (character names, places, sects, skills, items) and important recurring terms in their original {{LANGUAGE_NEED_NAME}} script.
+export const GLOSSARY_SUGGESTION_PROMPT = `Analyze the following novel context/synopsis for a {{LANGUAGE_NAME}} web novel. Your goal is to identify key proper nouns (character names, places, sects, skills, items) and important recurring terms in their original {{LANGUAGE_NAME}} script.
 
 For each term you identify, provide a suitable English translation or a standard pinyin/romanization for proper nouns.
 
