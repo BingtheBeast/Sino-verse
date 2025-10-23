@@ -1,11 +1,11 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT, DEFAULT_CHINESE_GLOSSARY, DEFAULT_KOREAN_GLOSSARY } from '../constants';
 import { Novel } from "../types";
 
 const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 const GEMINI_MODEL = 'gemini-pro';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -19,24 +19,23 @@ const getCombinedGlossary = (novel: Novel): string => {
 };
 
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
-    if (!genAI) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
+    if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
     
     try {
-        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
         const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
         const combinedGlossary = getCombinedGlossary(novel);
         const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
         
-        const chat = model.startChat({
-            history: [
+        const response = await geminiAi.models.generateContentStream({
+            model: GEMINI_MODEL,
+            contents: [
                 { role: 'user', parts: [{ text: finalPrompt }] },
                 { role: 'model', parts: [{ text: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' }] },
+                { role: 'user', parts: [{ text }] }
             ],
         });
 
-        const result = await chat.sendMessageStream(text);
-
-        for await (const chunk of result.stream) {
+        for await (const chunk of response) {
             const chunkText = chunk.text();
             if (chunkText) {
                 yield chunkText;
@@ -49,14 +48,17 @@ async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGene
 }
 
 async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
-    if (!genAI) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
+    if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured in environment variables.");
     
     try {
-        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
         const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
         const prompt = GLOSSARY_SUGGESTION_PROMPT.replace('{{CONTEXT}}', context).replace(/{{LANGUAGE_NAME}}/g, languageName);
         
-        const result = await model.generateContent(prompt);
+        const result = await geminiAi.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        
         const response = result.response;
         return response.text();
     } catch (error) {
