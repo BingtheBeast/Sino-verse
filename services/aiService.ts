@@ -6,7 +6,7 @@ const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 const geminiAi = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-const GEMINI_MODEL = 'gemini-pro';
+const GEMINI_MODEL = 'gemini-pro-latest';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
