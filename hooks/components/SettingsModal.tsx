@@ -9,12 +9,14 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   novel: Novel | null;
-  onSave: (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' }) => void;
+  // Updated type
+  onSave: (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'deepseek' }) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, onSave }) => {
   const [customGlossary, setCustomGlossary] = useState('');
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'groq'>('gemini');
+  // Updated type
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'groq' | 'deepseek'>('gemini');
   const [context, setContext] = useState('');
   const [suggestions, setSuggestions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -24,7 +26,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
   useEffect(() => {
     if (novel) {
       setCustomGlossary(novel.customGlossary || '');
-      setAiProvider(novel.aiProvider || 'gemini');
+      // Ensure provider defaults correctly if existing novel has an old value
+      const currentProvider = novel.aiProvider === 'gemini' || novel.aiProvider === 'groq' || novel.aiProvider === 'deepseek'
+          ? novel.aiProvider
+          : 'gemini';
+      setAiProvider(currentProvider);
     }
     if (isOpen) {
         setTimeout(() => glossaryRef.current?.focus(), 100);
@@ -37,7 +43,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
     onSave(novel.id, { customGlossary, aiProvider });
     onClose();
   };
-  
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError('');
@@ -80,11 +86,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
               <select
                 id="aiProvider"
                 value={aiProvider}
-                onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'groq')}
+                // Updated type
+                onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'groq' | 'deepseek')}
                 className="mt-1 block w-full rounded-md border-[--border-color] bg-[--input-bg] text-[--text-color] shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
               >
                 <option value="gemini">Gemini (Higher Quality)</option>
                 <option value="groq">Groq (Faster Speed)</option>
+                {/* Added Deepseek Option */}
+                <option value="deepseek">Deepseek (High Quality)</option>
               </select>
             </div>
             <div>
@@ -101,7 +110,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
                     placeholder={`'Original Term' = 'Translation'`}
                 />
             </div>
-            
+
             <div className="border-t border-[--border-color] pt-4">
                  <h3 className="text-lg font-semibold text-[--text-color] mb-2">AI Glossary Helper</h3>
                  <p className="text-sm text-[--status-text] mb-2">Paste a synopsis or context about the novel, and the AI will suggest glossary terms.</p>
@@ -129,7 +138,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
                     <button onClick={handleAppend} className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Append to My Glossary</button>
                 </div>
             )}
-            
+
             {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
         </div>
         <div className="flex justify-end pt-4 mt-4 border-t border-[--border-color] space-x-2">
