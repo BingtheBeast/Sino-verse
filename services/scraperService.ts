@@ -1,198 +1,224 @@
-export const NOVELS_STORAGE_KEY = 'novels_v3';
+import { ScrapedChapter } from '../types';
 
-export const DEFAULT_CHINESE_GLOSSARY = `
-# --- General Terms ---
-'前辈' = 'Senior'
-'晚辈' = 'Junior'
-'弟子' = 'Disciple'
-'师父' = 'Master'
-'师兄' = 'Senior Brother'
-'师弟' = 'Junior Brother'
-'师姐' = 'Senior Sister'
-'师妹' = 'Junior Sister'
-'掌门' = 'Sect Leader'
-'长老' = 'Elder'
-'宗门' = 'Sect'
-'家族' = 'Family'
-'公子' = 'Young Master'
-'小姐' = 'Young Miss'
-'道' = 'Dao'
-'道友' = 'Daoist Friend'
-'灵气' = 'Spiritual Qi'
-'真气' = 'True Qi'
-'元气' = 'Origin Qi'
-'内力' = 'Internal Energy'
-'修为' = 'Cultivation'
-'境界' = 'Realm'
-'突破' = 'Breakthrough'
-'瓶颈' = 'Bottleneck'
-'心魔' = 'Inner Demon'
-'神识' = 'Spiritual Sense'
-'元神' = 'Primordial Spirit'
-'洞府' = 'Cave Residence'
-'秘境' = 'Secret Realm'
-'法宝' = 'Magic Treasure'
-'灵石' = 'Spirit Stone'
-'丹药' = 'Elixir'
-'功法' = 'Cultivation Technique'
-'神通' = 'Divine Ability'
-'阵法' = 'Formation'
-'符箓' = 'Talisman'
-'妖兽' = 'Yao Beast'
-'魔兽' = 'Demonic Beast'
-'天劫' = 'Heavenly Tribulation'
-'飞升' = 'Ascend'
-'轮回' = 'Samsara'
-'因果' = 'Karma'
+const SCRAPINGBEE_API_URL = 'https://app.scrapingbee.com/api/v1/';
 
-# --- Cultivation Realms (Common) ---
-'炼气' = 'Qi Refining'
-'筑基' = 'Foundation Establishment'
-'金丹' = 'Golden Core'
-'元婴' = 'Nascent Soul'
-'化神' = 'Spirit Severing'
-'炼虚' = 'Void Refining'
-'合体' = 'Body Integration'
-'大乘' = 'Mahayana'
-'渡劫' = 'Tribulation'
-`;
+export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
+  if (!url || !url.startsWith('http')) {
+      throw new Error('Please enter a valid URL.');
+  }
 
-export const DEFAULT_KOREAN_GLOSSARY = `
-# --- General Terms ---
-'헌터' = 'Hunter'
-'게이트' = 'Gate'
-'던전' = 'Dungeon'
-'몬스터' = 'Monster'
-'마물' = 'Magic Beast'
-'마석' = 'Magic Stone'
-'길드' = 'Guild'
-'길드장' = 'Guild Master'
-'각성' = 'Awakening'
-'각성자' = 'Awakened'
-'플레이어' = 'Player'
-'시스템' = 'System'
-'레벨' = 'Level'
-'스킬' = 'Skill'
-'아이템' = 'Item'
-'인벤토리' = 'Inventory'
-'퀘스트' = 'Quest'
-'회귀' = 'Regression'
-'환생' = 'Reincarnation'
-'빙의' = 'Possession'
-'랭커' = 'Ranker'
-'랭킹' = 'Ranking'
-'상태창' = 'Status Window'
-'S급' = 'S-Rank'
-'A급' = 'A-Rank'
-'B급' = 'B-Rank'
-'C급' = 'C-Rank'
-'D급' = 'D-Rank'
-'E급' = 'E-Rank'
-'F급' = 'F-Rank'
+  const apiKey = import.meta.env.VITE_SCRAPINGBEE_API_KEY;
+  if (!apiKey) {
+      throw new Error("ScrapingBee API key (VITE_SCRAPINGBEE_API_KEY) is not configured.");
+  }
 
-# --- Common Roles ---
-'탱커' = 'Tank'
-'딜러' = 'Dealer'
-'힐러' = 'Healer'
-'서포터' = 'Support'
-'마법사' = 'Mage'
-'궁수' = 'Archer'
-'검사' = 'Swordsman'
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: url,
+    render_js: 'false',
+  });
 
-# --- Titles / Honorifics (Romanized) ---
-'-님' = '-nim'
-'-씨' = '-ssi'
-'형' = 'Hyung'
-'오빠' = 'Oppa'
-'누나' = 'Noona'
-'언니' = 'Unnie'
-'아저씨' = 'Ahjussi'
-'아줌마' = 'Ahjumma'
-`;
+  try {
+    const response = await fetch(`${SCRAPINGBEE_API_URL}?${params.toString()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Scraping for suggestions failed: ${response.status} ${response.statusText}. ${errorText}`);
+    }
 
-export const LANGUAGE_CONFIG = {
-  chinese: {
-    system_prompt: `You are a translation assistant specialized in translating Chinese web novels into English.
-Your task is to translate the text into English, ensuring that all terms from the glossary are accurately translated as specified.
-The translation should be natural-sounding and maintain the tone and style of the original text.
-Preserve the original paragraph structure and formatting.
-Do not add any extra text, commentary, or annotations.`,
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
     
-    glossary_prompt: `Here is the glossary you must follow:
---- GLOSSARY START ---
-{{GLOSSARY}}
---- GLOSSARY END ---`
-  },
-  korean: {
-    system_prompt: `You are a translation assistant specialized in translating Korean web novels into English.
-Your task is to translate the text into English, ensuring that all terms from the glossary are accurately translated as specified.
-The translation should be natural-sounding and maintain the tone and style of the original text.
-Preserve the original paragraph structure and formatting.
-Do not add any extra text, commentary, or annotations.`,
-    
-    glossary_prompt: `Here is the glossary you must follow:
---- GLOSSARY START ---
-{{GLOSSARY}}
---- GLOSSARY END ---`
-  },
+    const scores = new Map<string, number>();
+    const forbiddenTags = new Set(['NAV', 'HEADER', 'FOOTER', 'ASIDE', 'SCRIPT', 'STYLE', 'FORM', 'BUTTON', 'A', 'UL', 'LI', 'IFRAME', 'FIGURE', 'FIGCAPTION']);
+
+    doc.body.querySelectorAll('div, article, section, main').forEach(el => {
+      let parent = el.parentElement;
+      let isChildOfForbidden = false;
+      while(parent && parent !== doc.body) {
+        if (forbiddenTags.has(parent.tagName.toUpperCase())) {
+          isChildOfForbidden = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      if (isChildOfForbidden) return;
+      
+      const directTextLength = Array.from(el.childNodes)
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .reduce((acc, node) => acc + (node.textContent?.trim().length || 0), 0);
+
+      if (directTextLength < 100) return;
+      
+      const pCount = el.querySelectorAll('p').length;
+      const linkCount = el.querySelectorAll('a').length;
+
+      let score = (directTextLength * 1.0) + (pCount * 10) - (linkCount * 5);
+      
+      if (score > 100) { 
+        let selector = el.id ? `#${el.id}` : el.className && typeof el.className === 'string' ? `.${el.className.trim().split(/\s+/).filter(Boolean).join('.')}` : null;
+        if(selector) {
+            try {
+                if (doc.querySelectorAll(selector).length === 1) {
+                    scores.set(selector, score);
+                }
+            } catch(e) {}
+        }
+      }
+    });
+
+    const sortedCandidates = [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(entry => entry[0]);
+
+    const suggestions = new Set<string>(['#content', '.content', '.chapter-content', 'article', ...sortedCandidates]);
+    return Array.from(suggestions).slice(0, 5);
+
+  } catch (error) {
+    console.error('Error scraping for suggestions:', error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to get suggestions. Reason: ${error.message}. Try entering a selector manually.`);
+    }
+    throw new Error('An unknown error occurred while getting suggestions.');
+  }
 };
 
-export const GLOSSARY_SUGGESTION_PROMPT = `Analyze the following novel context/synopsis for a {{LANGUAGE_NAME}} web novel. Your goal is to identify key proper nouns (character names, places, sects, skills, items) and important recurring terms in their original {{LANGUAGE_NAME}} script.
+export const scrapeChapter = async (
+  url: string,
+  selector: string
+): Promise<ScrapedChapter> => {
+  const nextLinkSelectors = [
+      "a:contains('Next Chapter')",
+      "a:contains('next chapter')",
+      "a:contains('Next')",
+      "a:contains('next')",
+      "a[rel='next']",
+      "a.next-page",
+      "a.nav-next",
+      "a#next_chap",
+      "a.btn-next",
+      "a:contains('下一章')",
+      "a:contains('下章')",
+  ].join(', ');
+  
+  const prevLinkSelectors = [
+      "a:contains('Previous Chapter')",
+      "a:contains('previous chapter')",
+      "a:contains('Previous')",
+      "a:contains('previous')",
+      "a[rel='prev']",
+      "a.prev-page",
+      "a.nav-previous",
+      "a#prev_chap",
+      "a.btn-prev",
+      "a:contains('上一章')",
+      "a:contains('上章')",
+  ].join(', ');
+  
+  const onPageTitleSelectors = [
+      '.chapter-title',
+      '#chapter-title',
+      "*:contains('分卷阅读')",
+      "*:contains('Chapter ')",
+      "*:contains('CHAPTER ')",
+      "*:contains('第')",
+      `${selector} h1`,
+      `${selector} h2`,
+      `${selector} h3`,
+      '.content-title',
+      '.entry-title',
+      'h1',
+      'h2'
+  ].join(', ');
 
-For each term you identify, provide a suitable English translation or a standard pinyin/romanization for proper nouns.
+  const extractRules = {
+    onPageTitle: {
+        selector: onPageTitleSelectors,
+        output: 'text',
+        type: 'item',
+    },
+    content: { selector: selector, output: 'text' },
+    nextUrl: {
+      selector: nextLinkSelectors,
+      output: '@href',
+      type: 'item',
+    },
+    prevUrl: {
+      selector: prevLinkSelectors,
+      output: '@href',
+      type: 'item',
+    },
+  };
+  
+  const apiKey = import.meta.env.VITE_SCRAPINGBEE_API_KEY;
+  if (!apiKey) {
+      throw new Error("ScrapingBee API key (VITE_SCRAPINGBEE_API_KEY) is not configured in environment variables.");
+  }
 
-The output MUST be a simple list in the following format:
-'Original Term in {{LANGUAGE_NAME}}' = 'Suggested English Translation'
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: url,
+    extract_rules: JSON.stringify(extractRules),
+  });
 
-RULES:
-1.  ONLY output the list. Do not include any other commentary, headings, or explanations.
-2.  If the provided context is in English, do your best to infer the original terms and their spellings in {{LANGUAGE_NAME}}.
+  try {
+    const response = await fetch(`${SCRAPINGBEE_API_URL}?${params.toString()}`);
 
-CONTEXT:
-"""
-{{CONTEXT}}
-"""
-`;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Scraping failed: ${response.status} ${response.statusText}. Response: ${errorText}`);
+    }
 
-type RegexRule = {
-  pattern: RegExp;
-  replacement: string;
+    const scrapedData = await response.json();
+
+    const resolveUrl = (relativeOrAbsoluteUrl: string | null): string | null => {
+        if (!relativeOrAbsoluteUrl) return null;
+        try {
+            return new URL(relativeOrAbsoluteUrl, url).href;
+        } catch (e) {
+            console.warn(`Invalid URL found: ${relativeOrAbsoluteUrl}`);
+            return null;
+        }
+    }
+
+    const content = scrapedData.content || `Content not found with the provided selector ("${selector}"). Please check the selector in the novel's settings.`;
+    
+    const onPageTitle = scrapedData.onPageTitle?.trim() || '';
+    
+    let chapterNumber: number | null = null;
+    
+    let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) || 
+                       onPageTitle.match(/chapter[_-]?\s*(\d+)/i) || 
+                       onPageTitle.match(/第\s*(\d+)\s*章/);
+    
+    if (titleMatch) {
+        chapterNumber = parseInt(titleMatch[1], 10);
+    }
+    
+    if (!chapterNumber) {
+        const urlMatch = url.match(/\/(\d+)\.html/i) || 
+                         url.match(/\/(\d+)\/?$/i) ||
+                         url.match(/chapter[_-]?(\d+)/i);
+        if (urlMatch) {
+            chapterNumber = parseInt(urlMatch[1], 10);
+        }
+    }
+    
+    const finalTitle = onPageTitle || "Unknown Chapter"; 
+
+    return {
+      title: finalTitle,
+      chapterNumber,
+      content,
+      nextUrl: resolveUrl(scrapedData.nextUrl),
+      prevUrl: resolveUrl(scrapedData.prevUrl),
+    };
+
+  } catch (error) {
+    console.error('Error calling ScrapingBee API:', error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to scrape chapter content. Reason: ${error.message}`);
+    }
+    throw new Error('An unknown error occurred while scraping the chapter.');
+  }
 };
-
-// A list of find-and-replace rules to clean text BEFORE translation
-export const PRE_TRANSLATION_RULES: RegexRule[] = [
-  // Rule 1: Fixes names/words split by a newline (e.g. "Li\nChang" -> "Li Chang")
-  {
-    pattern: /([a-zA-Z])\n([a-zA-Z])/g,
-    replacement: '$1 $2',
-  },
-  // Rule 2: Removes excessive blank lines
-  {
-    pattern: /\n{3,}/g,
-    replacement: '\n\n',
-  },
-  
-  // --- NEW ENHANCED RULES ---
-  
-  // Rule 3: Remove common ad/junk lines (case-insensitive)
-  {
-    pattern: /Advertisement/gi,
-    replacement: '',
-  },
-  {
-    pattern: /Please support our website/gi,
-    replacement: '',
-  },
-  {
-    pattern: /This chapter was translated by .*/gi,
-    replacement: '',
-  },
-  {
-    pattern: /Share this chapter/gi,
-    replacement: '',
-  },
-  {
-    pattern: /read the latest chapter at/gi,
-    replacement: '',
-  },
-];
