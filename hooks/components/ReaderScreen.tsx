@@ -7,7 +7,7 @@ import { ArrowLeftIcon, ArrowRightIcon, RefreshIcon, SettingsIcon, ListIcon, XIc
 
 interface ReaderScreenProps {
   novel: Novel;
-  onClose: ();
+  onClose: () => void;
   onSettings: (novelId: string) => void;
   onNav: (url: string | null) => void;
 }
