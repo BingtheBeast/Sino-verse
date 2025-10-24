@@ -15,8 +15,8 @@ const GEMINI_MODEL = 'gemini-pro-latest';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-// Use the exact model ID from the OpenRouter example for the free Deepseek model
-const DEEPSEEK_MODEL_ID = 'tngtech/deepseek-r1t2-chimera:free';
+// Use the exact model ID from the OpenRouter example for the free Gemini model
+const OPENROUTER_MODEL_ID = 'google/gemini-2.0-flash-001';
 
 // --- Helper Function ---
 const getCombinedGlossary = (novel: Novel): string => {
@@ -194,14 +194,14 @@ async function generateGlossaryWithGroq(context: string, sourceLanguage: 'chines
     return data.choices[0]?.message?.content || '';
 }
 
-// --- Deepseek Functions (New) ---
-async function* translateWithDeepseekStream(text: string, novel: Novel): AsyncGenerator<string> {
+// --- OPENROUTER Functions (New) ---
+async function* translateWithOpenRouterStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!openRouterApiKey) throw new Error("OpenRouter API key (VITE_OPENROUTER_API_KEY) is not configured.");
     const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
     const combinedGlossary = getCombinedGlossary(novel);
     const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
     const body = JSON.stringify({
-        model: DEEPSEEK_MODEL_ID,
+        model: OPENROUTER_MODEL_ID,
         messages: [
             { role: 'user', content: finalPrompt },
             { role: 'assistant', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
@@ -227,8 +227,8 @@ async function* translateWithDeepseekStream(text: string, novel: Novel): AsyncGe
         const errorText = await response.text();
         let detailedError = errorText;
         try { detailedError = JSON.parse(errorText).error?.message || errorText; } catch (_) {}
-        console.error(`OpenRouter/Deepseek API error Response: ${errorText}`);
-        throw new Error(`OpenRouter/Deepseek API error: ${response.status} ${response.statusText}. ${detailedError}`);
+        console.error(`OpenRouter/gemini-flash API error Response: ${errorText}`);
+        throw new Error(`OpenRouter/gemini-flash API error: ${response.status} ${response.statusText}. ${detailedError}`);
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -244,16 +244,16 @@ async function* translateWithDeepseekStream(text: string, novel: Novel): AsyncGe
                 const parsed = JSON.parse(jsonStr);
                 const content = parsed.choices[0]?.delta?.content;
                 if (content) yield content;
-            } catch (error) { console.error('Error parsing OpenRouter/Deepseek stream chunk:', error, jsonStr); }
+            } catch (error) { console.error('Error parsing OpenRouter/gemini-flash stream chunk:', error, jsonStr); }
         }
     }
 }
 
-async function generateGlossaryWithDeepseek(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
+async function generateGlossaryWithOpenRouter(context: string, sourceLanguage: 'chinese' | 'korean'): Promise<string> {
      if (!openRouterApiKey) throw new Error("OpenRouter API key (VITE_OPENROUTER_API_KEY) is not configured.");
     const languageName = sourceLanguage.charAt(0).toUpperCase() + sourceLanguage.slice(1);
     const prompt = GLOSSARY_SUGGESTION_PROMPT.replace('{{CONTEXT}}', context).replace(/{{LANGUAGE_NAME}}/g, languageName);
-    const body = JSON.stringify({ model: DEEPSEEK_MODEL_ID, messages: [{ role: 'user', content: prompt }] });
+    const body = JSON.stringify({ model: OPENROUTER_MODEL_ID, messages: [{ role: 'user', content: prompt }] });
     // Replace with your actual site URL and name
     const siteUrl = 'https://your-app-name.vercel.app';
     const siteName = 'SinoVerse Novel Translator';
@@ -272,8 +272,8 @@ async function generateGlossaryWithDeepseek(context: string, sourceLanguage: 'ch
         const errorText = await response.text();
         let detailedError = errorText;
         try { detailedError = JSON.parse(errorText).error?.message || errorText; } catch (_) {}
-        console.error(`OpenRouter/Deepseek API error Response: ${errorText}`);
-        throw new Error(`OpenRouter/Deepseek API error: ${response.status} ${response.statusText}. ${detailedError}`);
+        console.error(`OpenRouter/gemini-flash API error Response: ${errorText}`);
+        throw new Error(`OpenRouter/gemini-flash API error: ${response.status} ${response.statusText}. ${detailedError}`);
     }
     const data = await response.json();
     return data.choices[0]?.message?.content || '';
@@ -282,7 +282,7 @@ async function generateGlossaryWithDeepseek(context: string, sourceLanguage: 'ch
 // --- Exported Functions (Updated) ---
 export async function* translateTextStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!text) return;
-    const provider = ['gemini', 'groq', 'deepseek'].includes(novel.aiProvider) ? novel.aiProvider : 'gemini';
+    const provider = ['gemini', 'groq', 'gemini-flash'].includes(novel.aiProvider) ? novel.aiProvider : 'gemini';
     switch (provider) {
         case 'gemini':
             if (!geminiAi) throw new Error("Gemini provider selected, but API key is missing.");
@@ -292,9 +292,9 @@ export async function* translateTextStream(text: string, novel: Novel): AsyncGen
              if (!groqApiKey) throw new Error("Groq provider selected, but API key is missing.");
             yield* translateWithGroqStream(text, novel);
             break;
-        case 'deepseek':
-             if (!openRouterApiKey) throw new Error("Deepseek provider selected, but OpenRouter API key is missing.");
-            yield* translateWithDeepseekStream(text, novel);
+        case 'gemini-flash':
+             if (!openRouterApiKey) throw new Error("gemini-flash provider selected, but OpenRouter API key is missing.");
+            yield* translateWithOpenRouterStream(text, novel);
             break;
         default:
              console.warn(`Unknown AI provider encountered: ${novel.aiProvider}, defaulting to Gemini.`);
@@ -306,10 +306,10 @@ export async function* translateTextStream(text: string, novel: Novel): AsyncGen
 export const generateGlossarySuggestions = async (
     context: string,
     sourceLanguage: 'chinese' | 'korean',
-    provider: 'gemini' | 'groq' | 'deepseek'
+    provider: 'gemini' | 'groq' | 'gemini-flash'
 ): Promise<string> => {
     if (!context) return '';
-    const effectiveProvider = ['gemini', 'groq', 'deepseek'].includes(provider) ? provider : 'gemini';
+    const effectiveProvider = ['gemini', 'groq', 'gemini-flash'].includes(provider) ? provider : 'gemini';
     switch (effectiveProvider) {
         case 'gemini':
              if (!geminiAi) throw new Error("Gemini provider selected, but API key is missing.");
@@ -317,9 +317,9 @@ export const generateGlossarySuggestions = async (
         case 'groq':
              if (!groqApiKey) throw new Error("Groq provider selected, but API key is missing.");
             return generateGlossaryWithGroq(context, sourceLanguage);
-        case 'deepseek':
-             if (!openRouterApiKey) throw new Error("Deepseek provider selected, but OpenRouter API key is missing.");
-            return generateGlossaryWithDeepseek(context, sourceLanguage);
+        case 'gemini-flash':
+             if (!openRouterApiKey) throw new Error("gemini-flash provider selected, but OpenRouter API key is missing.");
+            return generateGlossaryWithOpenRouter(context, sourceLanguage);
         default:
             console.warn(`Unknown AI provider encountered: ${provider}, defaulting to Gemini.`);
              if (!geminiAi) throw new Error("Defaulting to Gemini, but API key is missing.");
