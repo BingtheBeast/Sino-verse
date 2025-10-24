@@ -1,5 +1,5 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT, DEFAULT_CHINESE_GLOSSARY, DEFAULT_KOREAN_GLOSSARY } from '../constants';
+import { LANGUAGE_CONFIG, GLOSSARY_SUGGESTION_PROMPT, DEFAULT_CHINESE_GLOSSARY, DEFAULT_KOREAN_GLOSSARY, PRE_TRANSLATION_RULES } from '../constants';
 import { Novel } from "../types";
 
 // Read API Keys from environment variables
@@ -23,22 +23,40 @@ const getCombinedGlossary = (novel: Novel): string => {
   const defaultGlossary = novel.sourceLanguage === 'chinese'
     ? DEFAULT_CHINESE_GLOSSARY
     : DEFAULT_KOREAN_GLOSSARY;
-  return `# --- User's Custom Terms --- \n${novel.customGlossary || ''}\n\n# --- Default Glossary --- \n${defaultGlossary}`.trim();
+
+  // Clean the glossaries by removing comment lines
+  const cleanDefault = defaultGlossary.split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
+  const cleanCustom = (novel.customGlossary || '').split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
+
+  return `# --- User's Custom Terms --- \n${cleanCustom}\n\n# --- Default Glossary --- \n${cleanDefault}`.trim();
+};
+
+// --- NEW: (Inspired by glossarion's PatternManager.py) ---
+const preprocessText = (text: string): string => {
+  let processedText = text;
+  for (const rule of PRE_TRANSLATION_RULES) {
+    processedText = processedText.replace(rule.pattern, rule.replacement);
+  }
+  return processedText;
 };
 
 // --- Gemini Functions ---
 async function* translateWithGeminiStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!geminiAi) throw new Error("Gemini API key (VITE_GEMINI_API_KEY) is not configured.");
     let streamResult;
+
     try {
-        const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
+        const langConfig = LANGUAGE_CONFIG[novel.sourceLanguage];
         const combinedGlossary = getCombinedGlossary(novel);
-        const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
+        const glossaryPrompt = langConfig.glossary_prompt.replace('{{GLOSSARY}}', combinedGlossary);
+
         streamResult = await geminiAi.models.generateContentStream({
             model: GEMINI_MODEL,
             contents: [
-                { role: 'user', parts: [{ text: finalPrompt }] },
-                { role: 'model', parts: [{ text: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' }] },
+                { role: 'user', parts: [{ text: langConfig.system_prompt }] },
+                { role: 'model', parts: [{ text: 'Understood. I will follow all directives. Please provide the glossary.' }] },
+                { role: 'user', parts: [{ text: glossaryPrompt }] },
+                { role: 'model', parts: [{ text: 'Understood. I have received the glossary and will follow it strictly. Please provide the text to translate.' }] },
                 { role: 'user', parts: [{ text }] }
             ],
         });
@@ -136,14 +154,17 @@ async function generateGlossaryWithGemini(context: string, sourceLanguage: 'chin
 // --- Groq Functions (Unchanged) ---
 async function* translateWithGroqStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!groqApiKey) throw new Error("Groq API key (VITE_GROQ_API_KEY) is not configured.");
-    const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
+    
+    const langConfig = LANGUAGE_CONFIG[novel.sourceLanguage];
     const combinedGlossary = getCombinedGlossary(novel);
-    const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
+    const glossaryPrompt = langConfig.glossary_prompt.replace('{{GLOSSARY}}', combinedGlossary);
+
     const body = JSON.stringify({
         model: GROQ_MODEL,
         messages: [
-            { role: 'user', content: finalPrompt },
-            { role: 'assistant', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
+            { role: 'system', content: langConfig.system_prompt },
+            { role: 'user', content: glossaryPrompt },
+            { role: 'assistant', content: 'Understood. I have received the glossary and will follow it strictly. Please provide the text to translate.' },
             { role: 'user', content: text }
         ],
         stream: true,
@@ -197,14 +218,17 @@ async function generateGlossaryWithGroq(context: string, sourceLanguage: 'chines
 // --- OPENROUTER Functions (New) ---
 async function* translateWithOpenRouterStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!openRouterApiKey) throw new Error("OpenRouter API key (VITE_OPENROUTER_API_KEY) is not configured.");
-    const basePrompt = LANGUAGE_CONFIG[novel.sourceLanguage].prompt;
+    
+    const langConfig = LANGUAGE_CONFIG[novel.sourceLanguage];
     const combinedGlossary = getCombinedGlossary(novel);
-    const finalPrompt = basePrompt.replace('{{GLOSSARY}}', combinedGlossary);
+    const glossaryPrompt = langConfig.glossary_prompt.replace('{{GLOSSARY}}', combinedGlossary);
+
     const body = JSON.stringify({
         model: OPENROUTER_MODEL_ID,
         messages: [
-            { role: 'user', content: finalPrompt },
-            { role: 'assistant', content: 'Understood. I will follow all directives and the two-step translation process. Provide the text to translate.' },
+            { role: 'system', content: langConfig.system_prompt },
+            { role: 'user', content: glossaryPrompt },
+            { role: 'assistant', content: 'Understood. I have received the glossary and will follow it strictly. Please provide the text to translate.' },
             { role: 'user', content: text }
         ],
         stream: true,
@@ -282,24 +306,28 @@ async function generateGlossaryWithOpenRouter(context: string, sourceLanguage: '
 // --- Exported Functions (Updated) ---
 export async function* translateTextStream(text: string, novel: Novel): AsyncGenerator<string> {
     if (!text) return;
+
+    // --- NEW: Run pre-processing ---
+    const processedText = preprocessText(text);
+
     const provider = ['gemini', 'groq', 'gemini-flash'].includes(novel.aiProvider) ? novel.aiProvider : 'gemini';
     switch (provider) {
         case 'gemini':
             if (!geminiAi) throw new Error("Gemini provider selected, but API key is missing.");
-            yield* translateWithGeminiStream(text, novel);
+            yield* translateWithGeminiStream(processedText, novel);
             break;
         case 'groq':
              if (!groqApiKey) throw new Error("Groq provider selected, but API key is missing.");
-            yield* translateWithGroqStream(text, novel);
+            yield* translateWithGroqStream(processedText, novel);
             break;
         case 'gemini-flash':
              if (!openRouterApiKey) throw new Error("gemini-flash provider selected, but OpenRouter API key is missing.");
-            yield* translateWithOpenRouterStream(text, novel);
+            yield* translateWithOpenRouterStream(processedText, novel);
             break;
         default:
              console.warn(`Unknown AI provider encountered: ${novel.aiProvider}, defaulting to Gemini.`);
              if (!geminiAi) throw new Error("Defaulting to Gemini, but API key is missing.");
-             yield* translateWithGeminiStream(text, novel);
+             yield* translateWithGeminiStream(processedText, novel);
     }
 }
 
