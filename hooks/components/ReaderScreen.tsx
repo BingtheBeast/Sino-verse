@@ -60,7 +60,7 @@ const ReaderScreen: React.FC<ReaderScreenProps> = ({
       <main 
         ref={scrollRef} 
         className="flex-1 overflow-y-auto p-6 md:p-8 
-                   scroll-pt-16 scroll-pb-20"
+                   scroll-pt-16 scroll-pb-32"
       >
         <div 
           className="prose dark:prose-invert max-w-3xl mx-auto text-[--text-color] leading-relaxed whitespace-pre-wrap"
