@@ -5,7 +5,7 @@ export type Novel = {
   selector: string;
   sourceLanguage: 'chinese' | 'korean';
   customGlossary: string;
-  aiProvider: 'gemini' | 'groq' | 'deepseek'; // Added 'deepseek'
+  aiProvider: 'gemini' | 'groq' | 'gemini-flash'; // Added 'gemini-flash'
 };
 
 export type ScrapedChapter = {
