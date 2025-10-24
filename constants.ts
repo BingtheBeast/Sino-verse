@@ -161,13 +161,9 @@ type RegexRule = {
 
 // A list of find-and-replace rules to clean text BEFORE translation
 export const PRE_TRANSLATION_RULES: RegexRule[] = [
-  // Rule 1: Fixes words/names split by a newline (e.g. "Li\nChang" or "李\n昌")
-  // This now uses \p{L} (any Unicode letter) and the 'u' (Unicode) flag
-  {
-    pattern: /(\p{L})\n(\p{L})/gu,
-    replacement: '$1$2', // Use no space for CJK languages
-  },
-  // Rule 2: Removes excessive blank lines
+  // FAULTY RULE REMOVED
+  
+  // Rule 1: Removes excessive blank lines
   {
     pattern: /\n{3,}/g,
     replacement: '\n\n',
@@ -175,7 +171,7 @@ export const PRE_TRANSLATION_RULES: RegexRule[] = [
   
   // --- ENHANCED JUNK RULES ---
   
-  // Rule 3: Remove common ad/junk lines (case-insensitive)
+  // Rule 2: Remove common ad/junk lines (case-insensitive)
   {
     pattern: /Advertisement/gi,
     replacement: '',
@@ -197,7 +193,7 @@ export const PRE_TRANSLATION_RULES: RegexRule[] = [
     replacement: '',
   },
 
-  // Rule 4: Add your own language-specific junk rules here
+  // Rule 3: Add your own language-specific junk rules here
   // (Example for Chinese ads)
   {
     pattern: /.*广告.*/g, // Removes any line containing "广告" (advertisement)
