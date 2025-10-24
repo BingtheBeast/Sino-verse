@@ -112,14 +112,12 @@ export const DEFAULT_KOREAN_GLOSSARY = `
 
 export const LANGUAGE_CONFIG = {
   chinese: {
-    // This is the new system prompt (persona)
     system_prompt: `You are a translation assistant specialized in translating Chinese web novels into English.
 Your task is to translate the text into English, ensuring that all terms from the glossary are accurately translated as specified.
 The translation should be natural-sounding and maintain the tone and style of the original text.
 Preserve the original paragraph structure and formatting.
 Do not add any extra text, commentary, or annotations.`,
     
-    // This message will be sent *after* the system prompt
     glossary_prompt: `Here is the glossary you must follow:
 --- GLOSSARY START ---
 {{GLOSSARY}}
@@ -163,14 +161,51 @@ type RegexRule = {
 
 // A list of find-and-replace rules to clean text BEFORE translation
 export const PRE_TRANSLATION_RULES: RegexRule[] = [
-  // Rule 1: Fixes names/words split by a newline (e.g. "Li\nChang" -> "Li Chang")
+  // Rule 1: Fixes words/names split by a newline (e.g. "Li\nChang" or "李\n昌")
+  // This now uses \p{L} (any Unicode letter) and the 'u' (Unicode) flag
   {
-    pattern: /([a-zA-Z])\n([a-zA-Z])/g,
-    replacement: '$1 $2',
+    pattern: /(\p{L})\n(\p{L})/gu,
+    replacement: '$1$2', // Replaced with no space, which is better for CJK
   },
   // Rule 2: Removes excessive blank lines
   {
     pattern: /\n{3,}/g,
     replacement: '\n\n',
+  },
+  
+  // --- ENHANCED JUNK RULES ---
+  
+  // Rule 3: Remove common ad/junk lines (case-insensitive)
+  {
+    pattern: /Advertisement/gi,
+    replacement: '',
+  },
+  {
+    pattern: /Please support our website/gi,
+    replacement: '',
+  },
+  {
+    pattern: /This chapter was translated by .*/gi,
+    replacement: '',
+  },
+  {
+    pattern: /Share this chapter/gi,
+    replacement: '',
+  },
+  {
+    pattern: /read the latest chapter at/gi,
+    replacement: '',
+  },
+
+  // Rule 4: Add your own language-specific junk rules here
+  // (Example for Chinese ads)
+  {
+    pattern: /.*广告.*/g, // Removes any line containing "广告" (advertisement)
+    replacement: '',
+  },
+  // (Example for Korean ads)
+  {
+    pattern: /.*광고.*/g, // Removes any line containing "광고" (advertisement)
+    replacement: '',
   },
 ];
