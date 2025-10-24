@@ -100,7 +100,7 @@ function App() {
     setIsSettingsModalOpen(true);
   };
 
-  const handleSaveSettings = (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' }) => {
+  const handleSaveSettings = (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'gemini-flash' }) => {
     let updatedNovel: Novel | null = null;
     setNovels(prev => 
       prev.map(n => {
