@@ -165,7 +165,7 @@ export const PRE_TRANSLATION_RULES: RegexRule[] = [
   // This now uses \p{L} (any Unicode letter) and the 'u' (Unicode) flag
   {
     pattern: /(\p{L})\n(\p{L})/gu,
-    replacement: '$1$2', // Replaced with no space, which is better for CJK
+    replacement: '$1$2', // Use no space for CJK languages
   },
   // Rule 2: Removes excessive blank lines
   {
