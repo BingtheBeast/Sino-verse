@@ -112,42 +112,30 @@ export const DEFAULT_KOREAN_GLOSSARY = `
 
 export const LANGUAGE_CONFIG = {
   chinese: {
-    prompt: `You are an expert literary translator, translating Chinese web novels into high-quality, flowing English.
-Your goal is to produce a "human-quality" translation.
-
-You will perform a two-step process:
-1.  **Step 1 (Internal):** First, perform a highly literal, word-for-word translation to understand the raw meaning.
-2.  **Step 2 (Final Output):** Second, take your literal translation from Step 1 and rewrite it into natural, flowing, and literary English. This is the only text you will output.
-
-**TRANSLATION RULES:**
-1.  **GLOSSARY IS LAW:** You MUST follow the glossary below with 100% rigidity. Any term in the glossary must be translated *exactly* as specified. This includes the default glossary and the user's custom terms.
-2.  **LITERARY TONE:** The final output (Step 2) must be in a professional, literary style, capturing the original's narrative tone.
-3.  **IDIOMS:** Translate idioms conceptually, not literally.
-4.  **UNKNOWN NOUNS:** Transliterate proper nouns (names, places, sects) NOT in the glossary into standard Pinyin. DO NOT leave them as Chinese characters.
-5.  **OUTPUT:** Provide ONLY the final "Step 2" literary translation. No commentary, no original text, and no "Step 1" text.
-
+    // This is the new system prompt (persona)
+    system_prompt: `You are a translation assistant specialized in translating Chinese web novels into English.
+Your task is to translate the text into English, ensuring that all terms from the glossary are accurately translated as specified.
+The translation should be natural-sounding and maintain the tone and style of the original text.
+Preserve the original paragraph structure and formatting.
+Do not add any extra text, commentary, or annotations.`,
+    
+    // This message will be sent *after* the system prompt
+    glossary_prompt: `Here is the glossary you must follow:
 --- GLOSSARY START ---
 {{GLOSSARY}}
---- GLOSSARY END ---`,
+--- GLOSSARY END ---`
   },
   korean: {
-    prompt: `You are an expert literary translator, translating Korean web novels into high-quality, flowing English.
-Your goal is to produce a "human-quality" translation.
-
-You will perform a two-step process:
-1.  **Step 1 (Internal):** First, perform a highly literal, word-for-word translation to understand the raw meaning.
-2.  **Step 2 (Final Output):** Second, take your literal translation from Step 1 and rewrite it into natural, flowing, and literary English. This is the only text you will output.
-
-**TRANSLATION RULES:**
-1.  **GLOSSARY IS LAW:** You MUST follow the glossary below with 100% rigidity. Any term in the glossary must be translated *exactly* as specified. This includes the default glossary and the user's custom terms.
-2.  **LITERARY TONE:** The final output (Step 2) must be in a professional, literary style, capturing the original's narrative tone.
-3.  **UNKNOWN NOUNS:** Romanize names or terms NOT in the glossary using the Revised Romanization of Korean system.
-4.  **HONORIFICS:** Preserve and append honorifics like -nim, -ssi, -oppa (e.g., 'Gildong-nim').
-5.  **OUTPUT:** Provide ONLY the final "Step 2" literary translation. No commentary, no original text, and no "Step 1" text.
-
+    system_prompt: `You are a translation assistant specialized in translating Korean web novels into English.
+Your task is to translate the text into English, ensuring that all terms from the glossary are accurately translated as specified.
+The translation should be natural-sounding and maintain the tone and style of the original text.
+Preserve the original paragraph structure and formatting.
+Do not add any extra text, commentary, or annotations.`,
+    
+    glossary_prompt: `Here is the glossary you must follow:
 --- GLOSSARY START ---
 {{GLOSSARY}}
---- GLOSSARY END ---`,
+--- GLOSSARY END ---`
   },
 };
 
@@ -167,3 +155,22 @@ CONTEXT:
 {{CONTEXT}}
 """
 `;
+
+type RegexRule = {
+  pattern: RegExp;
+  replacement: string;
+};
+
+// A list of find-and-replace rules to clean text BEFORE translation
+export const PRE_TRANSLATION_RULES: RegexRule[] = [
+  // Rule 1: Fixes names/words split by a newline (e.g. "Li\nChang" -> "Li Chang")
+  {
+    pattern: /([a-zA-Z])\n([a-zA-Z])/g,
+    replacement: '$1 $2',
+  },
+  // Rule 2: Removes excessive blank lines
+  {
+    pattern: /\n{3,}/g,
+    replacement: '\n\n',
+  },
+];
