@@ -10,13 +10,13 @@ interface SettingsModalProps {
   onClose: () => void;
   novel: Novel | null;
   // Updated type
-  onSave: (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'deepseek' }) => void;
+  onSave: (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'gemini-flash' }) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, onSave }) => {
   const [customGlossary, setCustomGlossary] = useState('');
   // Updated type
-  const [aiProvider, setAiProvider] = useState<'gemini' | 'groq' | 'deepseek'>('gemini');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'groq' | 'gemini-flash'>('gemini');
   const [context, setContext] = useState('');
   const [suggestions, setSuggestions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -27,7 +27,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
     if (novel) {
       setCustomGlossary(novel.customGlossary || '');
       // Ensure provider defaults correctly if existing novel has an old value
-      const currentProvider = novel.aiProvider === 'gemini' || novel.aiProvider === 'groq' || novel.aiProvider === 'deepseek'
+      const currentProvider = novel.aiProvider === 'gemini' || novel.aiProvider === 'groq' || novel.aiProvider === 'gemini-flash'
           ? novel.aiProvider
           : 'gemini';
       setAiProvider(currentProvider);
@@ -87,13 +87,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
                 id="aiProvider"
                 value={aiProvider}
                 // Updated type
-                onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'groq' | 'deepseek')}
+                onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'groq' | 'gemini-flash')}
                 className="mt-1 block w-full rounded-md border-[--border-color] bg-[--input-bg] text-[--text-color] shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
               >
                 <option value="gemini">Gemini (Higher Quality)</option>
                 <option value="groq">Groq (Faster Speed)</option>
-                {/* Added Deepseek Option */}
-                <option value="deepseek">Deepseek (High Quality)</option>
+                {/* Added gemini-flash Option */}
+                <option value="gemini-flash">Gemini-Flash (Mid, via OpenRouter)</option>
               </select>
             </div>
             <div>
