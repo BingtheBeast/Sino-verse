@@ -3,7 +3,7 @@
 // --- CORRECTED FILE: api/suggest.ts ----------------
 // ---------------------------------------------------
 //
-import type { VercelRequest, VercelResponse } from '@vercel/node'; // <-- This now works
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
@@ -47,7 +47,8 @@ export default async function handler(
       if (directTextLength < 100) return;
 
       const pCount = $el.find('p').length;
-      const linkCount = $el.find('a').length.
+      // --- THIS IS THE FIX: Removed the period from the end of this line ---
+      const linkCount = $el.find('a').length;
 
       let score = (directTextLength * 1.0) + (pCount * 10) - (linkCount * 5);
 
