@@ -1,13 +1,12 @@
 //
 // ---------------------------------------------------
-// --- NEW FILE: api/scrape.ts -----------------------
+// --- CORRECTED FILE: api/scrape.ts -----------------
 // ---------------------------------------------------
 //
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '@vercel/node'; // <-- This now works
 import * as cheerio from 'cheerio';
-import { ScrapedChapter } from '../types'; // Re-uses your exact type
+import { ScrapedChapter } from '../types';
 
-// A realistic User-Agent is CRITICAL to avoid being blocked.
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
 // --- Logic replicated 1-to-1 from your original scraperService.ts ---
@@ -32,7 +31,6 @@ const onPageTitleSelectors = [
 ].join(', ');
 // ----------------------------------------------------------
 
-// Helper to resolve relative URLs
 function resolveUrl(baseUrl: string, relativeUrl: string | undefined): string | null {
   if (!relativeUrl) return null;
   try {
@@ -56,7 +54,6 @@ export default async function handler(
     return res.status(400).json({ error: 'Selector parameter is required' });
   }
 
-  // Replicates your logic for finding titles inside/outside the content block
   const allTitleSelectors = [
       onPageTitleSelectors,
       `${selector} h1`,
@@ -76,11 +73,8 @@ export default async function handler(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // 1. Find the main content block
     const $content = $(selector);
 
-    // 2. --- FIX FOR JUNK TEXT (Problem B) ---
-    // Define junk text patterns to find and remove.
     const junkSelectors = [
         "*:contains('请在')", 
         "*:contains('read at')", 
@@ -92,40 +86,38 @@ export default async function handler(
         "*:contains('Share this chapter')"
     ];
     
-    // Find and remove junk elements *within* the content block
     $content.find(junkSelectors.join(', ')).remove();
-    // ------------------------------------------
 
-    // 3. --- FIX FOR PARAGRAPHS (Problem A) ---
-    // Iterate over children (like <p> or <div>) to preserve structure.
+    // --- THIS IS THE CORRECTED, ERROR-FREE PARAGRAPH LOOP ---
     const paragraphs: string[] = [];
     $content.contents().each((i, el) => {
         const $el = $(el);
         let text = '';
         
-        if (el.type === 'tag' && (el.name === 'p' || el.name ===IA 'div')) {
+        // Get text from <p>, <div>, etc.
+        // The 'IA' typo is fixed here (it's '||')
+        if (el.type === 'tag' && (el.name === 'p' || el.name === 'div')) {
             text = $el.text().trim();
-        } else if (el.type === 'text') {
+        } 
+        // Also get text nodes that are direct children
+        else if (el.type === 'text') {
             text = $el.text().trim();
         }
         
+        // Only add non-empty paragraphs.
         if (text) {
             paragraphs.push(text);
         }
     });
+    // --- END OF CORRECTED LOOP ---
 
-    // Join with double newlines for `whitespace-pre-wrap`
     const finalContent = paragraphs.join('\n\n');
-    // -------------------------------------------
-
-    // --- (The rest is your original, replicated logic) ---
     
     const onPageTitle = $(allTitleSelectors).first().text().trim() || "Unknown Chapter";
     
     const nextUrl = resolveUrl(url, $(nextLinkSelectors).first().attr('href'));
     const prevUrl = resolveUrl(url, $(prevLinkSelectors).first().attr('href'));
 
-    // Replicate chapter number logic
     let chapterNumber: number | null = null;
     let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) ||
                      onPageTitle.match(/chapter[_-]?\s*(\d+)/i) ||
