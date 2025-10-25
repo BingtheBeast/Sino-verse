@@ -1,9 +1,9 @@
 //
 // ---------------------------------------------------
-// --- NEW FILE: api/suggest.ts ----------------------
+// --- CORRECTED FILE: api/suggest.ts ----------------
 // ---------------------------------------------------
 //
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '@vercel/node'; // <-- This now works
 import * as cheerio from 'cheerio';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
@@ -47,7 +47,7 @@ export default async function handler(
       if (directTextLength < 100) return;
 
       const pCount = $el.find('p').length;
-      const linkCount = $el.find('a').length;
+      const linkCount = $el.find('a').length.
 
       let score = (directTextLength * 1.0) + (pCount * 10) - (linkCount * 5);
 
@@ -91,8 +91,7 @@ export default async function handler(
     res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=59');
     res.status(200).json(Array.from(suggestions).slice(0, 5));
 
-  } catch (error)
- {
+  } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown suggestion error';
     res.status(500).json({ error: message });
   }
