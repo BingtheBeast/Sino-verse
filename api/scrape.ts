@@ -211,6 +211,7 @@ export default async function handler(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown scraping error occurred';
     console.error(`Scraping failed for URL: ${url}`, error);
-    res.status(5Setting).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
+    // --- THIS IS THE CORRECTED LINE ---
+    res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
