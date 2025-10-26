@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-import { Impit } from 'impit';
-import { ScrapedChapter } from '../types';
+import { Impit } from 'impit'; // Import Impit
+import { ScrapedChapter } from '../types'; // Adjust path if needed
 
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')", "a:contains('Next')",
@@ -52,19 +52,23 @@ export default async function handler(
   ].join(', ');
 
   try {
-    const client = new Impit({});
-    console.log(`Fetching with impit.fetch (impersonating chrome): ${url}`);
+    // --- Create an Impit client with impersonation settings ---
+    const client = new Impit({
+      browser: 'chrome116', // Specify browser profile here
+      timeout_ms: 45000,
+      // proxyUrl: '...', // Optional proxy
+      // ignoreTlsErrors: true, // Optional
+    });
+    console.log(`Fetching with impit.fetch (impersonating ${client.browser}): ${url}`);
 
-    // Pass impit-specific options within the second argument object
+    // --- Use client.fetch with standard options ---
     const response = await client.fetch(url, {
       method: 'GET',
-      // redirect: 'follow', // Standard fetch option, impit should handle it
-      // Impit specific options:
-      impersonate: 'chrome116',
-      timeout_ms: 45000,
-      // Note: Impit's fetch might handle redirects internally based on impersonation profile.
-      // If explicit control is needed and supported, add 'redirect' here or check impit docs.
+      // No 'impersonate' or 'timeout_ms' needed here, set in constructor
+      // Standard fetch options like headers can go here if needed:
+      // headers: { 'Accept-Language': 'en-GB' }
     });
+    // --- End of impit usage ---
 
     if (!response.ok) {
         let errorBody = '';
