@@ -3,6 +3,21 @@ import * as cheerio from 'cheerio';
 import { Impit } from 'impit';
 import { ScrapedChapter } from '../types';
 
+// --- PROXY ROTATION SETUP ---
+// Read the list from environment variables, or use your fallback.
+const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030';
+
+// Split the string into an array
+const PROXY_LIST = PROXY_LIST_STRING.split(',');
+
+// Function to get a random proxy from the list
+function getRandomProxy() {
+  if (PROXY_LIST.length === 0) return undefined;
+  const index = Math.floor(Math.random() * PROXY_LIST.length);
+  return PROXY_LIST[index];
+}
+// --- END PROXY SETUP ---
+
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')", "a:contains('Next')",
   "a:contains('next')", "a[rel='next']", "a.next-page", "a.nav-next",
@@ -38,7 +53,8 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  const { url, selector } = req.query;
+  // Read 'useProxy' from the query parameters
+  const { url, selector, useProxy } = req.query;
 
   if (typeof url !== 'string' || !url) {
     return res.status(400).json({ error: 'URL parameter is required' });
@@ -52,12 +68,27 @@ export default async function handler(
   ].join(', ');
 
   try {
-    const client = new Impit({
-      browser: 'chrome', // <-- Corrected: Use 'chrome' or 'firefox'
+    // --- CONDITIONAL PROXY LOGIC ---
+    const impitOptions: ConstructorParameters<typeof Impit>[0] = {
+      browser: 'chrome',
       timeout: 45000,
-    });
-    // Removed the faulty console.log referencing client.browser
-    console.log(`Fetching with impit.fetch (impersonating chrome): ${url}`);
+    };
+
+    if (useProxy === 'true') {
+      const proxyUrl = getRandomProxy();
+      if (proxyUrl) {
+        impitOptions.proxy = proxyUrl;
+        console.log(`Fetching with impit.fetch (impersonating chrome) via proxy: ${proxyUrl} for URL: ${url}`);
+      } else {
+        console.warn(`Proxy use requested, but PROXY_LIST is empty or invalid. Fetching directly.`);
+        console.log(`Fetching with impit.fetch (impersonating chrome) directly (no proxy): ${url}`);
+      }
+    } else {
+      console.log(`Fetching with impit.fetch (impersonating chrome) directly (no proxy): ${url}`);
+    }
+
+    const client = new Impit(impitOptions);
+    // --- END CONDITIONAL LOGIC ---
 
     const response = await client.fetch(url, {
       method: 'GET',
@@ -147,4 +178,3 @@ export default async function handler(
     res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
-
