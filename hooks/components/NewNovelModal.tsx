@@ -16,6 +16,7 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
   const [url, setUrl] = useState('');
   const [selector, setSelector] = useState('');
   const [sourceLanguage, setSourceLanguage] = useState<'chinese' | 'korean'>('chinese');
+  const [useProxy, setUseProxy] = useState(false); // Added this state
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,6 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
 
   useEffect(() => {
     if (isOpen) {
-      // Focus the title input when the modal opens for better UX
       setTimeout(() => titleInputRef.current?.focus(), 100);
     }
   }, [isOpen]);
@@ -44,7 +44,8 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
     setIsLoadingSuggestions(true);
     setSuggestions([]);
     try {
-      const fetchedSuggestions = await getSelectorSuggestions(url);
+      // Pass useProxy to the service
+      const fetchedSuggestions = await getSelectorSuggestions(url, useProxy);
       setSuggestions(fetchedSuggestions);
       if (fetchedSuggestions.length > 0) {
         setSelector(fetchedSuggestions[0]);
@@ -64,7 +65,8 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
         setError("All fields are required.");
         return;
     }
-    onAddNovel({ title, url, selector, sourceLanguage, customGlossary: '', aiProvider: 'gemini' });
+    // Pass useProxy when adding the novel
+    onAddNovel({ title, url, selector, sourceLanguage, customGlossary: '', aiProvider: 'gemini', useProxy });
     handleClose();
   };
   
@@ -72,6 +74,7 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
     setTitle('');
     setUrl('');
     setSelector('');
+    setUseProxy(false); // Reset on close
     setSuggestions([]);
     setError(null);
     setIsLoadingSuggestions(false);
@@ -154,6 +157,20 @@ const NewNovelModal: React.FC<NewNovelModalProps> = ({ isOpen, onClose, onAddNov
           )}
         </div>
 
+        {/* --- ADDED THIS CHECKBOX --- */}
+        <div className="flex items-center">
+            <input
+                id="useProxy"
+                type="checkbox"
+                checked={useProxy}
+                onChange={(e) => setUseProxy(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="useProxy" className="ml-2 block text-sm text-[--status-text]">
+                Use Proxy for scraping? (For blocked sites)
+            </label>
+        </div>
+        
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         
         <div className="flex justify-end pt-4 space-x-2">
