@@ -1,24 +1,15 @@
-//
-// ---------------------------------------------------
-// --- FINAL FILE: api/scrape.ts ---------------------
-// ---------------------------------------------------
-//
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
+import { Impit } from 'impit';
 import { ScrapedChapter } from '../types';
-
-const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-
-// --- NO PROXY URL ---
-// We fetch the target URL directly, as you originally did.
 
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')",
   "a:contains('Next')", "a:contains('next')", "a[rel='next']",
   "a.next-page", "a.nav-next", "a#next_chap", "a.btn-next",
   "a:contains('下一章')", "a:contains('下章')",
-  "a:contains('다음화')", "a:contains('다음 편')", // Added Korean
-  "#goNextBtn" // Added for booktoki
+  "a:contains('다음화')", "a:contains('다음 편')",
+  "#goNextBtn"
 ].join(', ');
 
 const prevLinkSelectors = [
@@ -26,23 +17,41 @@ const prevLinkSelectors = [
   "a:contains('Previous')", "a:contains('previous')", "a[rel='prev']",
   "a.prev-page", "a.nav-previous", "a#prev_chap", "a.btn-prev",
   "a:contains('上一章')", "a:contains('上章')",
-  "a:contains('이전화')", "a:contains('이전 편')", // Added Korean
-  "#goPrevBtn" // Added for booktoki
+  "a:contains('이전화')", "a:contains('이전 편')",
+  "#goPrevBtn"
 ].join(', ');
 
 const onPageTitleSelectors = [
   '.chapter-title', '#chapter-title', "*:contains('分卷阅读')",
   "*:contains('Chapter ')", "*:contains('CHAPTER ')", "*:contains('第')",
   '.content-title', '.entry-title', 'h1', 'h2',
-  '.toon-title' // Added for booktoki
+  '.toon-title'
 ].join(', ');
 
 function resolveUrl(baseUrl: string, relativeUrl: string | undefined): string | null {
   if (!relativeUrl) return null;
+  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+    try {
+        new URL(relativeUrl);
+        return relativeUrl;
+    } catch (_) {
+        console.warn(`Found invalid absolute URL: ${relativeUrl}`);
+        return null;
+    }
+  }
+  if (relativeUrl.startsWith('//')) {
+      try {
+          const base = new URL(baseUrl);
+          return `${base.protocol}${relativeUrl}`;
+      } catch (e) {
+          console.warn(`Invalid base URL for protocol-relative URL: base='${baseUrl}', relative='${relativeUrl}', Error: ${e}`);
+          return null;
+      }
+  }
   try {
     return new URL(relativeUrl, baseUrl).href;
   } catch (e) {
-    console.warn(`Invalid URL found: ${relativeUrl}`);
+    console.warn(`Invalid URL resolution: base='${baseUrl}', relative='${relativeUrl}', Error: ${e}`);
     return null;
   }
 }
@@ -51,7 +60,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  const { url, selector } = req.query; // This is the *original* URL
+  const { url, selector } = req.query;
 
   if (typeof url !== 'string' || !url) {
     return res.status(400).json({ error: 'URL parameter is required' });
@@ -68,117 +77,98 @@ export default async function handler(
   ].join(', ');
 
   try {
-    // --- THIS IS THE REAL FIX ---
-    // 1. We are fetching the URL *directly*. NO PROXY.
-    const fetchUrl = url;
-    
-    // 2. We send the FAKE_USER_AGENT *directly* to the target site.
-    // This is what makes it look like a real browser.
-    const fetchOptions = {
-      headers: { 
-        'User-Agent': FAKE_USER_AGENT,
-        'Referer': 'https://www.google.com/' 
-      },
-      cache: 'no-store',    // Prevents Vercel from caching a bad response
-      redirect: 'follow'  // Follows any redirects from the site
-    } as RequestInit;
-    
-    console.log(`Fetching *directly*: ${fetchUrl}`);
-    const response = await fetch(fetchUrl, fetchOptions);
+    const client = new Impit();
+    console.log(`Fetching with impit (impersonating chrome): ${url}`);
 
-    if (!response.ok) {
-      if (response.status === 403) {
-           throw new Error(`Failed to fetch: 403 Forbidden. The site is blocking requests from Vercel. This fix should have worked, but they may be blocking Vercel's IP range.`);
-      }
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${fetchUrl}`);
+    const response = await client.request({
+      url: url,
+      method: 'GET',
+      impersonate: 'chrome116',
+      timeout_ms: 45000,
+      redirect: 'follow',
+    });
+
+    if (response.status_code < 200 || response.status_code >= 300) {
+        let errorBody = '';
+        try { errorBody = response.text ?? ''; } catch { /* ignore */ }
+        console.error(`Impit request failed: Status ${response.status_code}, Body: ${errorBody.substring(0, 500)}`);
+        let headersInfo = '';
+        try { headersInfo = JSON.stringify(response.headers); } catch { /* ignore */ }
+        console.error(`Failing URL: ${url}, Headers: ${headersInfo}`);
+        throw new Error(`Failed to fetch: ${response.status_code} from ${url}`);
     }
 
-    const html = await response.text();
+    const html = response.text;
     const $ = cheerio.load(html);
 
     const $content = $(selector);
-    
+
     if ($content.length === 0) {
-        throw new Error(`Content not found. The selector "${selector}" did not match any elements on the page. Try using the "Suggest" button.`);
+        throw new Error(`Content not found. The selector "${selector}" did not match any elements on the page ${url}. Try using the "Suggest" button.`);
     }
 
     const junkSelectors = [
-        "*:contains('请在')", 
-        "*:contains('read at')", 
-        "*:contains('最新章节')",
-        "*:contains('本站域名')",
-        "*:contains('Advertisement')",
-        "*:contains('章节报错')",
-        "*:contains('Please support our website')",
-        "*:contains('Share this chapter')"
+        "*:contains('请在')", "*:contains('read at')", "*:contains('最新章节')",
+        "*:contains('本站域名')", "*:contains('Advertisement')", "*:contains('章节报错')",
+        "*:contains('Please support our website')", "*:contains('Share this chapter')",
+        "script", "style", "iframe", ".ads", "#ads", "[class*='advert']",
+        "[id*='advert']", ".ad", ".advertisement", "#ad-container",
+        "#comments", ".comment-section", ".post-comments"
     ];
-    
     $content.find(junkSelectors.join(', ')).remove();
 
-    // Enhanced logic:
-    // First, try to find <p> tags (for sites like booktoki)
-    // If none, fall back to your original logic (for plain sites)
     const paragraphs: string[] = [];
     const $paragraphs = $content.find('p');
-
-    if ($paragraphs.length > 1) { // Check for more than 1 to be sure
+    if ($paragraphs.length > 3 && $content.text().length > 200) {
         console.log(`Found ${$paragraphs.length} <p> tags, using <p> extraction logic.`);
-        $paragraphs.each((i, el) => {
+        $paragraphs.each((_, el) => {
             const text = $(el).text().trim();
-            if (text) {
-                paragraphs.push(text);
-            }
-        });
-    } else {
-        // Fallback for plain HTML sites
-        console.log("No <p> tags found, using fallback text extraction.");
-        $content.contents().each((i, el) => {
-            const $el = $(el);
-            let text = '';
-            
-            if (el.type === 'tag' && (el.name === 'p' || el.name === 'div')) {
-                text = $el.text().trim();
-            } 
-            else if (el.type === 'text') {
-                text = $el.text().trim();
-            }
-            
-            if (text) {
+            if (text && text.length > 10 && !text.toLowerCase().includes('advertisement')) {
                 paragraphs.push(text);
             }
         });
     }
 
-    const finalContent = paragraphs.join('\n\n');
-    
+    if (paragraphs.length < 3) {
+        console.log("Using fallback text extraction (divs, text nodes, br).");
+        paragraphs.length = 0;
+        $content.contents().each((_, el) => {
+            const $el = $(el);
+            let text = '';
+            if (el.type === 'tag') {
+                if (el.name === 'div' || el.name === 'section' || el.name === 'article') {
+                    text = $el.text().trim();
+                } else if (el.name === 'br') {
+                     if (paragraphs.length > 0 && paragraphs[paragraphs.length - 1] !== '') {
+                        paragraphs.push('');
+                     }
+                }
+            } else if (el.type === 'text') {
+                text = $el.text().trim();
+            }
+
+            if (text && text.length > 5 && !text.toLowerCase().includes('advertisement')) {
+                 if (paragraphs.length === 0 || paragraphs[paragraphs.length - 1] !== text) {
+                     paragraphs.push(text);
+                 }
+            }
+        });
+    }
+
+    const finalParagraphs = paragraphs.filter(p => p.trim().length > 0);
+    const finalContent = finalParagraphs.join('\n\n');
+
     const onPageTitle = $(allTitleSelectors).first().text().trim() || "Unknown Chapter";
-    
-    // Use the *original* URL to resolve relative links
     const nextUrl = resolveUrl(url, $(nextLinkSelectors).first().attr('href'));
     const prevUrl = resolveUrl(url, $(prevLinkSelectors).first().attr('href'));
 
-    // Enhanced chapter number logic
     let chapterNumber: number | null = null;
-    let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) ||
-                     onPageTitle.match(/chapter[_-]?\s*(\d+)/i) ||
-                     onPageTitle.match(/第\s*(\d+)\s*章/) ||
-                     onPageTitle.match(/(\d+)\s*화/); // Added Korean "Chapter"
+    const combinedMatchers = [ /chapter[_-]?\s*(\d+)/i, /第\s*(\d+)\s*[章話篇]/, /(\d+)\s*화/, /分卷阅读\s*(\d+)/, /\/(\d+)\.html$/i, /\/(\d+)\/?$/, /\/novel\/(\d+)/i, /view_?num=(\d+)/i ];
+    for (const regex of combinedMatchers.slice(0, 4)) { const titleMatch = onPageTitle.match(regex); if (titleMatch && titleMatch[1]) { chapterNumber = parseInt(titleMatch[1], 10); break; }}
+    if (!chapterNumber) { for (const regex of combinedMatchers.slice(4)) { const urlMatch = url.match(regex); if (urlMatch && urlMatch[1]) { chapterNumber = parseInt(urlMatch[1], 10); break; }}}
+    console.log(`Extracted Chapter Number: ${chapterNumber}`);
 
-    if (titleMatch) {
-      chapterNumber = parseInt(titleMatch[1], 10);
-    }
-
-    if (!chapterNumber) {
-      const urlMatch = url.match(/\/(\d+)\.html/i) ||
-                       url.match(/\/(\d+)\/?$/i) ||
-                       url.match(/chapter[_-]?(\d+)/i) ||
-                       url.match(/\/novel\/(\d+)/i); // Added: Match booktoki URL
-      if (urlMatch) {
-        chapterNumber = parseInt(urlMatch[1], 10);
-      }
-    }
-    
-    const contentToReturn = finalContent || `Content not found with selector ("${selector}") or was empty after cleaning.`;
+    const contentToReturn = finalContent || `Content not found with selector ("${selector}") on ${url} or was empty after cleaning.`;
 
     const scrapedData: ScrapedChapter = {
       title: onPageTitle,
@@ -188,11 +178,12 @@ export default async function handler(
       prevUrl,
     };
 
-    res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=59');
+    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=59');
     res.status(200).json(scrapedData);
 
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown scraping error';
-    res.status(500).json({ error: message });
+    const message = error instanceof Error ? error.message : 'Unknown scraping error occurred';
+    console.error(`Scraping failed for URL: ${url}`, error);
+    res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
