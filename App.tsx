@@ -42,7 +42,8 @@ function App() {
     setCurrentChapter(null);
     setError(null);
     try {
-      const chapterData = await scrapeChapter(url, novel.selector);
+      // Pass the novel's proxy setting to the scraper
+      const chapterData = await scrapeChapter(url, novel.selector, novel.useProxy);
       setCurrentChapter(chapterData);
       setCurrentNovel(novel);
       
@@ -100,12 +101,20 @@ function App() {
     setIsSettingsModalOpen(true);
   };
 
-  const handleSaveSettings = (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'gemini-flash' }) => {
+  // Updated function to accept all settings
+  const handleSaveSettings = (
+    novelId: string, 
+    settings: { 
+      customGlossary: string; 
+      aiProvider: 'gemini' | 'groq' | 'gemini-flash'; 
+      useProxy: boolean; // Added
+    }
+  ) => {
     let updatedNovel: Novel | null = null;
     setNovels(prev => 
       prev.map(n => {
         if (n.id === novelId) {
-          updatedNovel = { ...n, ...settings };
+          updatedNovel = { ...n, ...settings }; // Spread all settings
           return updatedNovel;
         }
         return n;
@@ -201,4 +210,3 @@ function App() {
 }
 
 export default App;
-
