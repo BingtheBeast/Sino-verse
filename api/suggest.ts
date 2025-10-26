@@ -13,20 +13,16 @@ export default async function handler(
   }
 
   try {
-    // --- Create an Impit client with impersonation settings ---
     const client = new Impit({
-      browser: 'chrome116', // Specify browser profile here
+      browser: 'chrome', // <-- Corrected: Use 'chrome' or 'firefox'
       timeout_ms: 30000,
-      // proxyUrl: '...', // Optional proxy
     });
-    console.log(`Fetching suggestions with impit.fetch (impersonating ${client.browser}): ${url}`);
+    // Removed the faulty console.log referencing client.browser
+    console.log(`Fetching suggestions with impit.fetch (impersonating chrome): ${url}`);
 
-    // --- Use client.fetch ---
     const response = await client.fetch(url, {
       method: 'GET',
-      // No 'impersonate' or 'timeout_ms' needed here
     });
-    // --- End of impit usage ---
 
     if (!response.ok) {
       let errorBody = '';
@@ -38,7 +34,6 @@ export default async function handler(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // --- Keep your existing scoring logic ---
     const scores = new Map<string, number>();
     const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption, input, textarea, select, option';
 
@@ -113,7 +108,6 @@ export default async function handler(
     ]);
 
     const finalSuggestions = Array.from(suggestions).slice(0, 7);
-    // --- End of scoring logic ---
 
     res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=59');
     res.status(200).json(finalSuggestions);
