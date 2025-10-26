@@ -3,17 +3,63 @@ import * as cheerio from 'cheerio';
 import { Impit } from 'impit';
 import { ScrapedChapter } from '../types';
 
-// --- PROXY ROTATION SETUP ---
-const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030'; // Replace fallback with your NEW credentials if needed
-const PROXY_LIST = PROXY_LIST_STRING.split(',');
+// --- OXYLABS SCRAPER API SETUP ---
+const OXYLABS_USER = process.env.OXYLABS_USER;
+const OXYLABS_PASS = process.env.OXYLABS_PASS;
+const OXYLABS_API_URL = 'https://realtime.oxylabs.io/v1/queries';
 
-function getRandomProxy() {
-  if (PROXY_LIST.length === 0) return undefined;
-  const index = Math.floor(Math.random() * PROXY_LIST.length);
-  return PROXY_LIST[index];
+/**
+ * Creates the Basic Authentication header for Oxylabs.
+ */
+function getOxylabsAuth(): string {
+  if (!OXYLABS_USER || !OXYLABS_PASS) {
+    throw new Error('Oxylabs username or password is not configured in environment variables.');
+  }
+  return 'Basic ' + Buffer.from(`${OXYLABS_USER}:${OXYLABS_PASS}`).toString('base64');
 }
-// --- END PROXY SETUP ---
 
+/**
+ * Fetches the raw HTML of a URL using the Oxylabs Scraper API.
+ * This is used to bypass Cloudflare and other bot-detection.
+ */
+async function fetchWithOxylabs(url: string): Promise<string> {
+  const payload = {
+    source: 'universal', // Use 'universal' for scraping specific URLs
+    url: url,
+    render: 'html',     // Ask Oxylabs to render JavaScript (solves Cloudflare)
+    parse: false        // We will parse the HTML ourselves with Cheerio
+  };
+
+  const response = await fetch(OXYLABS_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': getOxylabsAuth()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`Oxylabs API failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
+    throw new Error(`Failed to fetch from Oxylabs: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  // The raw HTML is in the 'content' field of the first result
+  const html = data?.results?.[0]?.content;
+  if (!html) {
+    console.error('Oxylabs response did not contain HTML content.', data);
+    throw new Error('Failed to get HTML from Oxylabs response.');
+  }
+  
+  return html;
+}
+// --- END OXYLABS ---
+
+
+// --- SELECTORS AND HELPERS (Unchanged) ---
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')", "a:contains('Next')",
   "a:contains('next')", "a[rel='next']", "a.next-page", "a.nav-next",
@@ -45,6 +91,7 @@ function resolveUrl(baseUrl: string, relativeUrl: string | undefined): string | 
   try { return new URL(relativeUrl, baseUrl).href; } catch (e) { console.warn(`Invalid URL resolution: base='${baseUrl}', relative='${relativeUrl}', Error: ${e}`); return null; }
 }
 
+// --- MAIN HANDLER ---
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -63,46 +110,37 @@ export default async function handler(
   ].join(', ');
 
   try {
-    // --- CORRECTED PROXY LOGIC ---
-    // Use ImpitOptions type from the library for better type checking if available,
-    // otherwise use 'any' as a workaround for the TS error.
-    const impitOptions: any = { // Use 'any' or 'ImpitOptions' if you can import it
-      browser: 'chrome',
-      timeout: 45000,
-    };
+    let html: string;
 
     if (useProxy === 'true') {
-      const proxyUrl = getRandomProxy();
-      if (proxyUrl) {
-        // --- THIS IS THE CORRECT OPTION NAME ---
-        impitOptions.proxyUrl = proxyUrl;
-        console.log(`Fetching with impit.fetch (impersonating chrome) via proxy: ${proxyUrl} for URL: ${url}`);
-      } else {
-        console.warn(`Proxy use requested, but PROXY_LIST is empty or invalid. Fetching directly.`);
-        console.log(`Fetching with impit.fetch (impersonating chrome) directly (no proxy): ${url}`);
-      }
+      // --- Use Oxylabs Scraper API to bypass Cloudflare ---
+      console.log(`Fetching with Oxylabs Scraper API for URL: ${url}`);
+      html = await fetchWithOxylabs(url);
     } else {
+      // --- Use standard Impit (no proxy) for simple sites ---
       console.log(`Fetching with impit.fetch (impersonating chrome) directly (no proxy): ${url}`);
+      const client = new Impit({
+        browser: 'chrome',
+        timeout: 45000,
+      });
+
+      const response = await client.fetch(url, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+          let errorBody = '';
+          try { errorBody = await response.text(); } catch { /* ignore */ }
+          console.error(`Impit fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
+          let headersInfo = '';
+          try { headersInfo = JSON.stringify(Object.fromEntries(response.headers.entries())); } catch { /* ignore */ }
+          console.error(`Failing URL: ${url}, Headers: ${headersInfo}`);
+          throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${url}`);
+      }
+      html = await response.text();
     }
-
-    const client = new Impit(impitOptions);
-    // --- END CORRECTION ---
-
-    const response = await client.fetch(url, {
-      method: 'GET',
-    });
-
-    if (!response.ok) {
-        let errorBody = '';
-        try { errorBody = await response.text(); } catch { /* ignore */ }
-        console.error(`Impit fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
-        let headersInfo = '';
-        try { headersInfo = JSON.stringify(Object.fromEntries(response.headers.entries())); } catch { /* ignore */ }
-        console.error(`Failing URL: ${url}, Headers: ${headersInfo}`);
-        throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${url}`);
-    }
-
-    const html = await response.text();
+    
+    // --- PARSING LOGIC (Runs on HTML from either source) ---
     const $ = cheerio.load(html);
 
     const $content = $(selector);
@@ -173,6 +211,6 @@ export default async function handler(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown scraping error occurred';
     console.error(`Scraping failed for URL: ${url}`, error);
-    res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
+    res.status(5Setting).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
