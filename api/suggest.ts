@@ -1,12 +1,15 @@
 //
 // ---------------------------------------------------
-// --- CORRECTED FILE: api/suggest.ts ----------------
+// --- FINAL FILE: api/suggest.ts --------------------
 // ---------------------------------------------------
 //
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+
+// This free proxy will be used for all requests to bypass IP blocks
+const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
 
 export default async function handler(
   req: VercelRequest,
@@ -19,18 +22,31 @@ export default async function handler(
   }
 
   try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': FAKE_USER_AGENT }
-    });
+    // Always build the proxy URL for every request
+    const fetchUrl = PROXY_URL + url;
+
+    // Always send these headers.
+    const fetchOptions = {
+      headers: { 
+        'User-Agent': FAKE_USER_AGENT,
+        'Referer': 'https://www.google.com/' 
+      }
+    };
+
+    console.log(`Fetching for suggest via proxy: ${fetchUrl}`);
+    const response = await fetch(fetchUrl, fetchOptions);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+      if (response.status === 403) {
+           throw new Error(`Failed to fetch: 403 Forbidden. The site is blocking the proxy. You may need to try a different proxy URL in /api/suggest.ts.`);
+      }
+      throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${fetchUrl}`);
     }
 
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // --- Re-implementing your exact scoring logic from scraperService.ts ---
+    // Scoring logic (with your bug fix + enhancements for booktoki)
     const scores = new Map<string, number>();
     const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption';
 
@@ -44,30 +60,48 @@ export default async function handler(
       const directTextLength = $el.contents().filter((i, node) => node.type === 'text')
         .text().trim().length;
 
-      if (directTextLength < 100) return;
+      // Relaxed this condition to catch more possibilities
+      if (directTextLength < 50 && $el.find('p').length < 1) return;
 
       const pCount = $el.find('p').length;
-      // --- THIS IS THE FIX: Removed the period from the end of this line ---
-      const linkCount = $el.find('a').length;
+      // Fixed the bug where you had 'a.'
+      const linkCount = $el.find('a').length; 
 
-      let score = (directTextLength * 1.0) + (pCount * 10) - (linkCount * 5);
+      let score = (directTextLength * 0.5) + (pCount * 20) - (linkCount * 5); // Prioritize <p> tags
+
+      // --- ENHANCEMENT: Boost good selectors ---
+      const id = $el.attr('id');
+      if (id === 'novel_content' || id === 'content' || id === 'chapter-content' || id === 'article') {
+          score += 10000; // Heavily boost common content IDs
+      }
+      const className = $el.attr('class');
+      if (className && (className.includes('content') || className.includes('chapter-body') || className.includes('article-body'))) {
+          score += 500; // Also boost common content classes
+      }
+      // Give even more points if it contains paragraphs, like booktoki
+      if(pCount > 5) {
+          score += (pCount * 10);
+      }
+      // --- END OF ENHANCEMENT ---
 
       if (score > 100) {
         let selector: string | null = null;
-        const id = $el.attr('id');
-        const className = $el.attr('class');
-
+        
         if (id) {
           if ($(`#${id}`).length === 1) {
             selector = `#${id}`;
           }
         } else if (className) {
-          const classSelector = `.${className.trim().split(/\s+/).filter(Boolean).join('.')}`;
-          try {
-            if ($(classSelector).length === 1) {
-              selector = classSelector;
-            }
-          } catch (e) { /* ignore invalid class syntax */ }
+          // Use the first class only for simplicity
+          const firstClass = className.trim().split(/\s+/)[0];
+          if (firstClass) {
+            const classSelector = `.${firstClass}`;
+            try {
+              if ($(classSelector).length === 1) {
+                selector = classSelector;
+              }
+            } catch (e) { /* ignore invalid class syntax */ }
+          }
         }
         
         if (selector) {
@@ -81,13 +115,15 @@ export default async function handler(
       .map(entry => entry[0]);     
 
     const suggestions = new Set<string>([
+        // Pre-pend the most likely candidates
+        '#novel_content', // Specific to booktoki
+        '.h3dafc73cd7', // Specific to booktoki inner div
         '#content', 
         '.content', 
         '.chapter-content', 
         'article', 
         ...sortedCandidates
     ]);
-    // -----------------------------------------------------------------
 
     res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=59');
     res.status(200).json(Array.from(suggestions).slice(0, 5));
