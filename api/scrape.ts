@@ -9,8 +9,8 @@ import { ScrapedChapter } from '../types';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
-// Reverted to the original proxy
-const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
+// --- NO PROXY URL ---
+// We fetch the target URL directly, as you originally did.
 
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')",
@@ -68,26 +68,27 @@ export default async function handler(
   ].join(', ');
 
   try {
-    // The target URL MUST be encoded for the proxy
-    const fetchUrl = PROXY_URL + encodeURIComponent(url);
+    // --- THIS IS THE REAL FIX ---
+    // 1. We are fetching the URL *directly*. NO PROXY.
+    const fetchUrl = url;
     
-    // --- THIS IS THE FIX ---
-    // Added 'cache' and 'redirect' to make fetch more robust
+    // 2. We send the FAKE_USER_AGENT *directly* to the target site.
+    // This is what makes it look like a real browser.
     const fetchOptions = {
       headers: { 
         'User-Agent': FAKE_USER_AGENT,
-        'Referer': 'https://www.google.com/'
+        'Referer': 'https://www.google.com/' 
       },
-      cache: 'no-store',    // Bypasses any Vercel/proxy cache
-      redirect: 'follow'  // Follows HTTP redirects
-    } as RequestInit; // Type assertion for 'cache'
+      cache: 'no-store',    // Prevents Vercel from caching a bad response
+      redirect: 'follow'  // Follows any redirects from the site
+    } as RequestInit;
     
-    console.log(`Fetching via proxy: ${fetchUrl}`);
+    console.log(`Fetching *directly*: ${fetchUrl}`);
     const response = await fetch(fetchUrl, fetchOptions);
 
     if (!response.ok) {
       if (response.status === 403) {
-           throw new Error(`Failed to fetch: 403 Forbidden. The site is blocking the proxy. You may need to try a different proxy URL in /api/scrape.ts.`);
+           throw new Error(`Failed to fetch: 403 Forbidden. The site is blocking requests from Vercel. This fix should have worked, but they may be blocking Vercel's IP range.`);
       }
       throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${fetchUrl}`);
     }
@@ -114,10 +115,13 @@ export default async function handler(
     
     $content.find(junkSelectors.join(', ')).remove();
 
+    // Enhanced logic:
+    // First, try to find <p> tags (for sites like booktoki)
+    // If none, fall back to your original logic (for plain sites)
     const paragraphs: string[] = [];
     const $paragraphs = $content.find('p');
 
-    if ($paragraphs.length > 1) { 
+    if ($paragraphs.length > 1) { // Check for more than 1 to be sure
         console.log(`Found ${$paragraphs.length} <p> tags, using <p> extraction logic.`);
         $paragraphs.each((i, el) => {
             const text = $(el).text().trim();
@@ -126,6 +130,7 @@ export default async function handler(
             }
         });
     } else {
+        // Fallback for plain HTML sites
         console.log("No <p> tags found, using fallback text extraction.");
         $content.contents().each((i, el) => {
             const $el = $(el);
@@ -148,13 +153,12 @@ export default async function handler(
     
     const onPageTitle = $(allTitleSelectors).first().text().trim() || "Unknown Chapter";
     
+    // Use the *original* URL to resolve relative links
     const nextUrl = resolveUrl(url, $(nextLinkSelectors).first().attr('href'));
     const prevUrl = resolveUrl(url, $(prevLinkSelectors).first().attr('href'));
 
+    // Enhanced chapter number logic
     let chapterNumber: number | null = null;
-    
-    // --- THIS IS THE TYPO FIX ---
-    // Corrected onPageTItle -> onPageTitle
     let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) ||
                      onPageTitle.match(/chapter[_-]?\s*(\d+)/i) ||
                      onPageTitle.match(/第\s*(\d+)\s*章/) ||
@@ -168,7 +172,7 @@ export default async function handler(
       const urlMatch = url.match(/\/(\d+)\.html/i) ||
                        url.match(/\/(\d+)\/?$/i) ||
                        url.match(/chapter[_-]?(\d+)/i) ||
-                       url.match(/\/novel\/(\d+)/i);
+                       url.match(/\/novel\/(\d+)/i); // Added: Match booktoki URL
       if (urlMatch) {
         chapterNumber = parseInt(urlMatch[1], 10);
       }
