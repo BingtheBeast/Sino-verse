@@ -9,8 +9,7 @@ import { ScrapedChapter } from '../types';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
-// --- THIS IS THE FIX ---
-// Reverted to the original proxy, as it works with the target site.
+// Reverted to the original proxy
 const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
 
 const nextLinkSelectors = [
@@ -69,18 +68,19 @@ export default async function handler(
   ].join(', ');
 
   try {
-    // Always build the proxy URL for every request
-    // The target URL MUST be encoded to ensure its query parameters (like &)
-    // are treated as part of the proxy's 'quest' value.
+    // The target URL MUST be encoded for the proxy
     const fetchUrl = PROXY_URL + encodeURIComponent(url);
     
-    // Always send these headers. The proxy will pass them on.
+    // --- THIS IS THE FIX ---
+    // Added 'cache' and 'redirect' to make fetch more robust
     const fetchOptions = {
       headers: { 
         'User-Agent': FAKE_USER_AGENT,
-        'Referer': 'https://www.google.com/' // A generic referer
-      }
-    };
+        'Referer': 'https://www.google.com/'
+      },
+      cache: 'no-store',    // Bypasses any Vercel/proxy cache
+      redirect: 'follow'  // Follows HTTP redirects
+    } as RequestInit; // Type assertion for 'cache'
     
     console.log(`Fetching via proxy: ${fetchUrl}`);
     const response = await fetch(fetchUrl, fetchOptions);
@@ -114,13 +114,10 @@ export default async function handler(
     
     $content.find(junkSelectors.join(', ')).remove();
 
-    // Enhanced logic:
-    // First, try to find <p> tags (for sites like booktoki)
-    // If none, fall back to your original logic (for plain sites)
     const paragraphs: string[] = [];
     const $paragraphs = $content.find('p');
 
-    if ($paragraphs.length > 1) { // Check for more than 1 to be sure
+    if ($paragraphs.length > 1) { 
         console.log(`Found ${$paragraphs.length} <p> tags, using <p> extraction logic.`);
         $paragraphs.each((i, el) => {
             const text = $(el).text().trim();
@@ -129,7 +126,6 @@ export default async function handler(
             }
         });
     } else {
-        // Fallback for plain HTML sites
         console.log("No <p> tags found, using fallback text extraction.");
         $content.contents().each((i, el) => {
             const $el = $(el);
@@ -152,15 +148,16 @@ export default async function handler(
     
     const onPageTitle = $(allTitleSelectors).first().text().trim() || "Unknown Chapter";
     
-    // Use the *original* URL to resolve relative links
     const nextUrl = resolveUrl(url, $(nextLinkSelectors).first().attr('href'));
     const prevUrl = resolveUrl(url, $(prevLinkSelectors).first().attr('href'));
 
-    // Enhanced chapter number logic
     let chapterNumber: number | null = null;
+    
+    // --- THIS IS THE TYPO FIX ---
+    // Corrected onPageTItle -> onPageTitle
     let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) ||
                      onPageTitle.match(/chapter[_-]?\s*(\d+)/i) ||
-                     onPageTItle.match(/第\s*(\d+)\s*章/) ||
+                     onPageTitle.match(/第\s*(\d+)\s*章/) ||
                      onPageTitle.match(/(\d+)\s*화/); // Added Korean "Chapter"
 
     if (titleMatch) {
@@ -171,7 +168,7 @@ export default async function handler(
       const urlMatch = url.match(/\/(\d+)\.html/i) ||
                        url.match(/\/(\d+)\/?$/i) ||
                        url.match(/chapter[_-]?(\d+)/i) ||
-                       url.match(/\/novel\/(\d+)/i); // Added: Match booktoki URL
+                       url.match(/\/novel\/(\d+)/i);
       if (urlMatch) {
         chapterNumber = parseInt(urlMatch[1], 10);
       }
