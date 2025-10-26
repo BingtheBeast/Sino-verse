@@ -1,9 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
 import { Impit } from 'impit';
-import { ScrapedChapter } from '../types'; // Adjust path if needed
+import { ScrapedChapter } from '../types';
 
-// --- Keep your existing constants and functions ---
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')", "a:contains('Next')",
   "a:contains('next')", "a[rel='next']", "a.next-page", "a.nav-next",
@@ -34,8 +33,6 @@ function resolveUrl(baseUrl: string, relativeUrl: string | undefined): string | 
   }
   try { return new URL(relativeUrl, baseUrl).href; } catch (e) { console.warn(`Invalid URL resolution: base='${baseUrl}', relative='${relativeUrl}', Error: ${e}`); return null; }
 }
-// --- End of existing constants/functions ---
-
 
 export default async function handler(
   req: VercelRequest,
@@ -55,23 +52,19 @@ export default async function handler(
   ].join(', ');
 
   try {
-    const client = new Impit({}); // Pass empty options object or specific config
+    const client = new Impit({});
     console.log(`Fetching with impit.fetch (impersonating chrome): ${url}`);
 
-    // --- Corrected client.fetch call ---
-    // Impersonate and timeout are options specific to impit's fetch,
-    // passed in the second argument alongside standard RequestInit options.
-    const response = await client.fetch(url, { // URL is first argument
-      method: 'GET',              // Standard RequestInit options
-      redirect: 'follow',         // Standard RequestInit options
-      // --- Impit specific options ---
-      impersonate: 'chrome116',   // Correctly placed impit option
-      timeout_ms: 45000,        // Correctly placed impit option
-      // proxyUrl: '...',        // If you needed a proxy
-      // ignoreTlsErrors: true, // If you needed to ignore cert issues
-      // --- End of Impit specific options ---
+    // Pass impit-specific options within the second argument object
+    const response = await client.fetch(url, {
+      method: 'GET',
+      // redirect: 'follow', // Standard fetch option, impit should handle it
+      // Impit specific options:
+      impersonate: 'chrome116',
+      timeout_ms: 45000,
+      // Note: Impit's fetch might handle redirects internally based on impersonation profile.
+      // If explicit control is needed and supported, add 'redirect' here or check impit docs.
     });
-    // --- End of corrected call ---
 
     if (!response.ok) {
         let errorBody = '';
@@ -92,7 +85,6 @@ export default async function handler(
         throw new Error(`Content not found. The selector "${selector}" did not match any elements on the page ${url}. Try using the "Suggest" button.`);
     }
 
-    // --- Keep your existing junk removal logic ---
     const junkSelectors = [
         "*:contains('请在')", "*:contains('read at')", "*:contains('最新章节')",
         "*:contains('本站域名')", "*:contains('Advertisement')", "*:contains('章节报错')",
@@ -102,9 +94,7 @@ export default async function handler(
         "#comments", ".comment-section", ".post-comments"
     ];
     $content.find(junkSelectors.join(', ')).remove();
-    // --- End of junk removal ---
 
-    // --- Keep your existing paragraph extraction logic ---
     const paragraphs: string[] = [];
     const $paragraphs = $content.find('p');
     if ($paragraphs.length > 3 && $content.text().length > 200) {
@@ -130,19 +120,16 @@ export default async function handler(
     }
     const finalParagraphs = paragraphs.filter(p => p.trim().length > 0);
     const finalContent = finalParagraphs.join('\n\n');
-    // --- End of paragraph extraction ---
 
     const onPageTitle = $(allTitleSelectors).first().text().trim() || "Unknown Chapter";
     const nextUrl = resolveUrl(url, $(nextLinkSelectors).first().attr('href'));
     const prevUrl = resolveUrl(url, $(prevLinkSelectors).first().attr('href'));
 
-    // --- Keep your existing chapter number extraction logic ---
     let chapterNumber: number | null = null;
     const combinedMatchers = [ /chapter[_-]?\s*(\d+)/i, /第\s*(\d+)\s*[章話篇]/, /(\d+)\s*화/, /分卷阅读\s*(\d+)/, /\/(\d+)\.html$/i, /\/(\d+)\/?$/, /\/novel\/(\d+)/i, /view_?num=(\d+)/i ];
     for (const regex of combinedMatchers.slice(0, 4)) { const titleMatch = onPageTitle.match(regex); if (titleMatch && titleMatch[1]) { chapterNumber = parseInt(titleMatch[1], 10); break; }}
     if (!chapterNumber) { for (const regex of combinedMatchers.slice(4)) { const urlMatch = url.match(regex); if (urlMatch && urlMatch[1]) { chapterNumber = parseInt(urlMatch[1], 10); break; }}}
     console.log(`Extracted Chapter Number: ${chapterNumber}`);
-    // --- End of chapter number logic ---
 
     const contentToReturn = finalContent || `Content not found with selector ("${selector}") on ${url} or was empty after cleaning.`;
 
