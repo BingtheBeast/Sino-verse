@@ -69,7 +69,8 @@ export default async function handler(
 
   try {
     // --- CONDITIONAL PROXY LOGIC ---
-    const impitOptions: ConstructorParameters<typeof Impit>[0] = {
+    // Changed type to 'any' to fix TS2339
+    const impitOptions: any = {
       browser: 'chrome',
       timeout: 45000,
     };
