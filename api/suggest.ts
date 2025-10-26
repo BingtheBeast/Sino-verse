@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-import { Impit } from 'impit';
+import { Impit } from 'impit'; // <-- Import Impit
 
 export default async function handler(
   req: VercelRequest,
@@ -14,26 +14,28 @@ export default async function handler(
 
   try {
     const client = new Impit();
-    console.log(`Fetching suggestions with impit (impersonating chrome): ${url}`);
+    console.log(`Fetching suggestions with impit.fetch (impersonating chrome): ${url}`);
 
-    const response = await client.request({
-      url: url,
+    // --- Use client.fetch ---
+    const response = await client.fetch(url, { // URL is first argument
       method: 'GET',
       impersonate: 'chrome116',
       timeout_ms: 30000,
       redirect: 'follow',
     });
+    // --- End of impit usage ---
 
-    if (response.status_code < 200 || response.status_code >= 300) {
+    if (!response.ok) { // Standard fetch-like 'ok' property check
       let errorBody = '';
-      try { errorBody = response.text ?? ''; } catch { /* ignore */ }
-      console.error(`Impit suggestion request failed: Status ${response.status_code}, Body: ${errorBody.substring(0, 500)}`);
-      throw new Error(`Failed to fetch for suggestions: ${response.status_code} from ${url}`);
+      try { errorBody = await response.text(); } catch { /* ignore */ }
+      console.error(`Impit suggestion fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
+      throw new Error(`Failed to fetch for suggestions: ${response.status} ${response.statusText} from ${url}`);
     }
 
-    const html = response.text;
+    const html = await response.text(); // Use await response.text()
     const $ = cheerio.load(html);
 
+    // --- Keep your existing scoring logic ---
     const scores = new Map<string, number>();
     const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption, input, textarea, select, option';
 
@@ -67,9 +69,7 @@ export default async function handler(
             if (currentId && !$el.parents(`[id="${currentId}"]`).length && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(currentId)) {
                 try {
                     const escapedId = currentId.replace(/([^\\])\./g, '$1\\.');
-                    if ($(`#${escapedId}`).length === 1) {
-                         selector = `#${currentId}`;
-                    }
+                    if ($(`#${escapedId}`).length === 1) selector = `#${currentId}`;
                 } catch (e) { console.warn(`Invalid ID selector generated or failed check: #${currentId}`); }
             }
             if (!selector && currentClass && (score > 300 || pCount > 3 || directTextLength > 500)) {
@@ -78,21 +78,15 @@ export default async function handler(
                     const classSelector = `.${firstClass}`;
                     try {
                         const matches = $(classSelector);
-                        if (matches.length >= 1 && matches.length <= 5 && (matches.is($el) || matches.find($el).length > 0)) {
-                           selector = classSelector;
-                        }
+                        if (matches.length >= 1 && matches.length <= 5 && (matches.is($el) || matches.find($el).length > 0)) selector = classSelector;
                     } catch (e) { console.warn(`Invalid class selector generated or failed check: ${classSelector}`); }
                 }
             }
 
             if (selector) {
-                try {
-                    if ($(selector).length === 1) score += 100;
-                } catch { /* ignore */ }
+                try { if ($(selector).length === 1) score += 100; } catch { /* ignore */ }
                 const existingScore = scores.get(selector) ?? -Infinity;
-                if (score > existingScore) {
-                    scores.set(selector, score);
-                }
+                if (score > existingScore) scores.set(selector, score);
             }
         }
     });
@@ -100,11 +94,8 @@ export default async function handler(
      const filteredScores = new Map<string, number>();
      for (const [selector, score] of scores.entries()) {
          try {
-             if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) {
-                 filteredScores.set(selector, score);
-             } else {
-                 console.log(`Filtering out broad selector: ${selector} (matches ${$(selector).length})`);
-             }
+             if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) filteredScores.set(selector, score);
+             else console.log(`Filtering out broad selector: ${selector} (matches ${$(selector).length})`);
          } catch { /* ignore */ }
      }
 
@@ -119,6 +110,7 @@ export default async function handler(
     ]);
 
     const finalSuggestions = Array.from(suggestions).slice(0, 7);
+    // --- End of scoring logic ---
 
     res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=59');
     res.status(200).json(finalSuggestions);
