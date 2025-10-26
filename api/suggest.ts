@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-import { Impit } from 'impit'; // <-- Import Impit
+import { Impit } from 'impit';
 
 export default async function handler(
   req: VercelRequest,
@@ -13,26 +13,30 @@ export default async function handler(
   }
 
   try {
-    const client = new Impit();
+    const client = new Impit({});
     console.log(`Fetching suggestions with impit.fetch (impersonating chrome): ${url}`);
 
-    // --- Use client.fetch ---
+    // --- Corrected client.fetch call ---
     const response = await client.fetch(url, { // URL is first argument
-      method: 'GET',
-      impersonate: 'chrome116',
-      timeout_ms: 30000,
-      redirect: 'follow',
+      method: 'GET',              // Standard options
+      redirect: 'follow',         // Standard options
+      // --- Impit specific options ---
+      impersonate: 'chrome116',   // Correctly placed impit option
+      timeout_ms: 30000,        // Correctly placed impit option
+      // proxyUrl: '...',        // Optional proxy
+      // ignoreTlsErrors: true, // Optional cert ignore
+      // --- End of Impit specific options ---
     });
-    // --- End of impit usage ---
+    // --- End of corrected call ---
 
-    if (!response.ok) { // Standard fetch-like 'ok' property check
+    if (!response.ok) {
       let errorBody = '';
       try { errorBody = await response.text(); } catch { /* ignore */ }
       console.error(`Impit suggestion fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
       throw new Error(`Failed to fetch for suggestions: ${response.status} ${response.statusText} from ${url}`);
     }
 
-    const html = await response.text(); // Use await response.text()
+    const html = await response.text();
     const $ = cheerio.load(html);
 
     // --- Keep your existing scoring logic ---
