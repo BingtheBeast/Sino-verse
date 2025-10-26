@@ -9,8 +9,10 @@ import { ScrapedChapter } from '../types';
 
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
-// This free proxy will be used for all requests to bypass IP blocks
-const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
+// --- THIS IS THE FIX ---
+// Swapped unreliable 'api.codetabs.com' for 'api.allorigins.win'.
+// This proxy expects the parameter to be 'url=' instead of 'quest='.
+const PROXY_URL = 'https://api.allorigins.win/raw?url=';
 
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')",
@@ -69,13 +71,11 @@ export default async function handler(
 
   try {
     // Always build the proxy URL for every request
-    // --- THIS IS THE FIX ---
     // The target URL MUST be encoded to ensure its query parameters (like &)
-    // are treated as part of the proxy's 'quest' value, not as new
-    // parameters for the proxy request itself.
+    // are treated as part of the proxy's 'url' value.
     const fetchUrl = PROXY_URL + encodeURIComponent(url);
     
-    // Always send these headers. The proxy will pass them on.
+    // Always send these headers.
     const fetchOptions = {
       headers: { 
         'User-Agent': FAKE_USER_AGENT,
