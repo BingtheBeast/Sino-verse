@@ -54,7 +54,7 @@ export default async function handler(
   try {
     const client = new Impit({
       browser: 'chrome', // <-- Corrected: Use 'chrome' or 'firefox'
-      timeout_ms: 45000,
+      timeout: 45000,
     });
     // Removed the faulty console.log referencing client.browser
     console.log(`Fetching with impit.fetch (impersonating chrome): ${url}`);
@@ -147,3 +147,4 @@ export default async function handler(
     res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
+
