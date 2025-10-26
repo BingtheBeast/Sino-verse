@@ -1,16 +1,6 @@
-//
-// ---------------------------------------------------
-// --- FINAL FILE: api/suggest.ts --------------------
-// ---------------------------------------------------
-//
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-
-const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-
-// --- THIS IS THE FIX ---
-// Reverted to the original proxy, as it works with the target site.
-const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
+import { Impit } from 'impit';
 
 export default async function handler(
   req: VercelRequest,
@@ -23,116 +13,119 @@ export default async function handler(
   }
 
   try {
-    // Always build the proxy URL for every request
-    // The target URL MUST be encoded to ensure its query parameters (like &)
-    // are treated as part of the proxy's 'quest' value.
-    const fetchUrl = PROXY_URL + encodeURIComponent(url);
+    const client = new Impit();
+    console.log(`Fetching suggestions with impit (impersonating chrome): ${url}`);
 
-    // Always send these headers.
-    const fetchOptions = {
-      headers: { 
-        'User-Agent': FAKE_USER_AGENT,
-        'Referer': 'https://www.google.com/' 
-      }
-    };
-
-    console.log(`Fetching for suggest via proxy: ${fetchUrl}`);
-    const response = await fetch(fetchUrl, fetchOptions);
-
-    if (!response.ok) {
-      if (response.status === 403) {
-           throw new Error(`Failed to fetch: 403 Forbidden. The site is blocking the proxy. You may need to try a different proxy URL in /api/suggest.ts.`);
-      }
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${fetchUrl}`);
-    }
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // Scoring logic (with your bug fix + enhancements for booktoki)
-    const scores = new Map<string, number>();
-    const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption';
-
-    $('body').find('div, article, section, main').each((i, el) => {
-      const $el = $(el);
-
-      if ($el.parents(forbiddenTags).length > 0) {
-        return;
-      }
-
-      const directTextLength = $el.contents().filter((i, node) => node.type === 'text')
-        .text().trim().length;
-
-      // Relaxed this condition to catch more possibilities
-      if (directTextLength < 50 && $el.find('p').length < 1) return;
-
-      const pCount = $el.find('p').length;
-      // Fixed the bug where you had 'a.'
-      const linkCount = $el.find('a').length; 
-
-      let score = (directTextLength * 0.5) + (pCount * 20) - (linkCount * 5); // Prioritize <p> tags
-
-      // --- ENHANCEMENT: Boost good selectors ---
-      const id = $el.attr('id');
-      if (id === 'novel_content' || id === 'content' || id === 'chapter-content' || id === 'article') {
-          score += 10000; // Heavily boost common content IDs
-      }
-      const className = $el.attr('class');
-      if (className && (className.includes('content') || className.includes('chapter-body') || className.includes('article-body'))) {
-          score += 500; // Also boost common content classes
-      }
-      // Give even more points if it contains paragraphs, like booktoki
-      if(pCount > 5) {
-          score += (pCount * 10);
-      }
-      // --- END OF ENHANCEMENT ---
-
-      if (score > 100) {
-        let selector: string | null = null;
-        
-        if (id) {
-          if ($(`#${id}`).length === 1) {
-            selector = `#${id}`;
-          }
-        } else if (className) {
-          // Use the first class only for simplicity
-          const firstClass = className.trim().split(/\s+/)[0];
-          if (firstClass) {
-            const classSelector = `.${firstClass}`;
-            try {
-              if ($(classSelector).length === 1) {
-                selector = classSelector;
-              }
-            } catch (e) { /* ignore invalid class syntax */ }
-          }
-        }
-        
-        if (selector) {
-            scores.set(selector, score);
-        }
-      }
+    const response = await client.request({
+      url: url,
+      method: 'GET',
+      impersonate: 'chrome116',
+      timeout_ms: 30000,
+      redirect: 'follow',
     });
 
-    const sortedCandidates = [...scores.entries()]
-      .sort((a, b) => b[1] - a[1]) 
-      .map(entry => entry[0]);     
+    if (response.status_code < 200 || response.status_code >= 300) {
+      let errorBody = '';
+      try { errorBody = response.text ?? ''; } catch { /* ignore */ }
+      console.error(`Impit suggestion request failed: Status ${response.status_code}, Body: ${errorBody.substring(0, 500)}`);
+      throw new Error(`Failed to fetch for suggestions: ${response.status_code} from ${url}`);
+    }
+
+    const html = response.text;
+    const $ = cheerio.load(html);
+
+    const scores = new Map<string, number>();
+    const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption, input, textarea, select, option';
+
+    $('body').find('div, article, section, main, p').each((_, el) => {
+        const $el = $(el);
+        if ($el.is(forbiddenTags) || $el.parents(forbiddenTags).length > 0) return;
+
+        const id = $el.attr('id');
+        const className = $el.attr('class');
+        const isLikelyContentContainer = (id && (id.includes('content') || id.includes('article') || id.includes('chapter'))) || (className && (className.includes('content') || className.includes('article') || className.includes('chapter')));
+        const directTextLength = $el.contents().filter((_, node) => node.type === 'text').text().trim().length;
+        const pCount = $el.find('p').length;
+
+        if (directTextLength < 50 && pCount < 1 && !isLikelyContentContainer) return;
+
+        const linkCount = $el.find('a').length;
+        const childElementCount = $el.children().length;
+        let score = (directTextLength * 0.5) + (pCount * 30) - (linkCount * 10) - (childElementCount * 0.1);
+
+        if (id === 'novel_content' || id === 'content' || id === 'chapter-content' || id === 'article' || id === 'main-content') score += 10000;
+        if (className && (className.includes('content') || className.includes('chapter-body') || className.includes('article-body') || className.includes('main-text') || className.includes('entry-content'))) score += 500;
+        if (pCount > 5) score += (pCount * 15);
+        if (id && (id.includes('sidebar') || id.includes('comment'))) score -= 5000;
+        if (className && (className.includes('sidebar') || className.includes('comment'))) score -= 5000;
+
+        if (score > 80) {
+            let selector: string | null = null;
+            const currentId = $el.attr('id');
+            const currentClass = $el.attr('class');
+
+            if (currentId && !$el.parents(`[id="${currentId}"]`).length && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(currentId)) {
+                try {
+                    const escapedId = currentId.replace(/([^\\])\./g, '$1\\.');
+                    if ($(`#${escapedId}`).length === 1) {
+                         selector = `#${currentId}`;
+                    }
+                } catch (e) { console.warn(`Invalid ID selector generated or failed check: #${currentId}`); }
+            }
+            if (!selector && currentClass && (score > 300 || pCount > 3 || directTextLength > 500)) {
+                const firstClass = currentClass.trim().split(/\s+/).find(cls => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(cls) && cls.length > 2);
+                if (firstClass) {
+                    const classSelector = `.${firstClass}`;
+                    try {
+                        const matches = $(classSelector);
+                        if (matches.length >= 1 && matches.length <= 5 && (matches.is($el) || matches.find($el).length > 0)) {
+                           selector = classSelector;
+                        }
+                    } catch (e) { console.warn(`Invalid class selector generated or failed check: ${classSelector}`); }
+                }
+            }
+
+            if (selector) {
+                try {
+                    if ($(selector).length === 1) score += 100;
+                } catch { /* ignore */ }
+                const existingScore = scores.get(selector) ?? -Infinity;
+                if (score > existingScore) {
+                    scores.set(selector, score);
+                }
+            }
+        }
+    });
+
+     const filteredScores = new Map<string, number>();
+     for (const [selector, score] of scores.entries()) {
+         try {
+             if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) {
+                 filteredScores.set(selector, score);
+             } else {
+                 console.log(`Filtering out broad selector: ${selector} (matches ${$(selector).length})`);
+             }
+         } catch { /* ignore */ }
+     }
+
+    const sortedCandidates = [...filteredScores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(entry => entry[0]);
 
     const suggestions = new Set<string>([
-        // Pre-pend the most likely candidates
-        '#novel_content', // Specific to booktoki
-        '.h3dafc73cd7', // Specific to booktoki inner div
-        '#content', 
-        '.content', 
-        '.chapter-content', 
-        'article', 
-        ...sortedCandidates
+        '#content', '#novel_content', '.entry-content', '#main-content',
+        ...sortedCandidates,
+        '.chapter-content', 'article', '.article-body', '.content', '.main-text'
     ]);
 
-    res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate=59');
-    res.status(200).json(Array.from(suggestions).slice(0, 5));
+    const finalSuggestions = Array.from(suggestions).slice(0, 7);
+
+    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=59');
+    res.status(200).json(finalSuggestions);
 
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown suggestion error';
-    res.status(500).json({ error: message });
+    const message = error instanceof Error ? error.message : 'Unknown suggestion error occurred';
+    console.error(`Suggest failed for URL: ${url}`, error);
+    res.status(500).json({ error: `Failed to get suggestions for ${url}. Reason: ${message}` });
   }
 }
