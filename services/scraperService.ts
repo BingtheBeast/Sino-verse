@@ -1,23 +1,22 @@
-//
-// ---------------------------------------------------
-// --- MODIFIED FILE: services/scraperService.ts -----
-// ---------------------------------------------------
-//
 import { ScrapedChapter } from '../types';
 
 /**
  * Fetches suggestions for CSS selectors from our new serverless function.
  * This is now just a simple wrapper for our /api/suggest endpoint.
  */
-export const getSelectorSuggestions = async (url: string): Promise<string[]> => {
+// Updated to accept and pass 'useProxy'
+export const getSelectorSuggestions = async (url: string, useProxy: boolean): Promise<string[]> => {
   if (!url || !url.startsWith('http')) {
     throw new Error('Please enter a valid URL.');
   }
 
-  const params = new URLSearchParams({ url });
+  // Pass useProxy choice to the API
+  const params = new URLSearchParams({ 
+    url,
+    useProxy: String(useProxy)
+  });
 
   try {
-    // Call our own /api/suggest endpoint. This works on mobile!
     const response = await fetch(`/api/suggest?${params.toString()}`);
 
     if (!response.ok) {
@@ -34,7 +33,6 @@ export const getSelectorSuggestions = async (url: string): Promise<string[]> => 
   } catch (error) {
     console.error('Error fetching selector suggestions:', error);
     const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-    // Provide a more helpful error to the user in NewNovelModal
     throw new Error(`Failed to get suggestions. Reason: ${message}. Try entering a selector manually.`);
   }
 };
@@ -43,18 +41,21 @@ export const getSelectorSuggestions = async (url: string): Promise<string[]> => 
  * Scrapes chapter content using our new serverless function.
  * This is now just a simple wrapper for our /api/scrape endpoint.
  */
+// Updated to accept and pass 'useProxy'
 export const scrapeChapter = async (
   url: string,
-  selector: string
+  selector: string,
+  useProxy: boolean
 ): Promise<ScrapedChapter> => {
 
+  // Pass useProxy choice to the API
   const params = new URLSearchParams({
     url: url,
     selector: selector,
+    useProxy: String(useProxy),
   });
 
   try {
-    // Call our own /api/scrape endpoint. This also works on mobile!
     const response = await fetch(`/api/scrape?${params.toString()}`);
 
     if (!response.ok) {
@@ -62,7 +63,6 @@ export const scrapeChapter = async (
       throw new Error(errorData.error || `Scraping failed: ${response.status} ${response.statusText}`);
     }
 
-    // The data returned from the API matches the ScrapedChapter type exactly
     const scrapedData: ScrapedChapter = await response.json();
     return scrapedData;
 
