@@ -4,13 +4,9 @@ import { Impit } from 'impit';
 import { ScrapedChapter } from '../types';
 
 // --- PROXY ROTATION SETUP ---
-// Read the list from environment variables, or use your fallback.
-const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030';
-
-// Split the string into an array
+const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030'; // Replace fallback with your NEW credentials if needed
 const PROXY_LIST = PROXY_LIST_STRING.split(',');
 
-// Function to get a random proxy from the list
 function getRandomProxy() {
   if (PROXY_LIST.length === 0) return undefined;
   const index = Math.floor(Math.random() * PROXY_LIST.length);
@@ -53,7 +49,6 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Read 'useProxy' from the query parameters
   const { url, selector, useProxy } = req.query;
 
   if (typeof url !== 'string' || !url) {
@@ -68,9 +63,10 @@ export default async function handler(
   ].join(', ');
 
   try {
-    // --- CONDITIONAL PROXY LOGIC ---
-    // Changed type to 'any' to fix TS2339
-    const impitOptions: any = {
+    // --- CORRECTED PROXY LOGIC ---
+    // Use ImpitOptions type from the library for better type checking if available,
+    // otherwise use 'any' as a workaround for the TS error.
+    const impitOptions: any = { // Use 'any' or 'ImpitOptions' if you can import it
       browser: 'chrome',
       timeout: 45000,
     };
@@ -78,7 +74,8 @@ export default async function handler(
     if (useProxy === 'true') {
       const proxyUrl = getRandomProxy();
       if (proxyUrl) {
-        impitOptions.proxy = proxyUrl;
+        // --- THIS IS THE CORRECT OPTION NAME ---
+        impitOptions.proxyUrl = proxyUrl;
         console.log(`Fetching with impit.fetch (impersonating chrome) via proxy: ${proxyUrl} for URL: ${url}`);
       } else {
         console.warn(`Proxy use requested, but PROXY_LIST is empty or invalid. Fetching directly.`);
@@ -89,7 +86,7 @@ export default async function handler(
     }
 
     const client = new Impit(impitOptions);
-    // --- END CONDITIONAL LOGIC ---
+    // --- END CORRECTION ---
 
     const response = await client.fetch(url, {
       method: 'GET',
