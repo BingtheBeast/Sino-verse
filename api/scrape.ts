@@ -10,9 +10,8 @@ import { ScrapedChapter } from '../types';
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
 // --- THIS IS THE FIX ---
-// Swapped unreliable 'api.codetabs.com' for 'api.allorigins.win'.
-// This proxy expects the parameter to be 'url=' instead of 'quest='.
-const PROXY_URL = 'https://api.allorigins.win/raw?url=';
+// Reverted to the original proxy, as it works with the target site.
+const PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
 
 const nextLinkSelectors = [
   "a:contains('Next Chapter')", "a:contains('next chapter')",
@@ -72,10 +71,10 @@ export default async function handler(
   try {
     // Always build the proxy URL for every request
     // The target URL MUST be encoded to ensure its query parameters (like &)
-    // are treated as part of the proxy's 'url' value.
+    // are treated as part of the proxy's 'quest' value.
     const fetchUrl = PROXY_URL + encodeURIComponent(url);
     
-    // Always send these headers.
+    // Always send these headers. The proxy will pass them on.
     const fetchOptions = {
       headers: { 
         'User-Agent': FAKE_USER_AGENT,
@@ -161,7 +160,7 @@ export default async function handler(
     let chapterNumber: number | null = null;
     let titleMatch = onPageTitle.match(/分卷阅读\s*(\d+)/) ||
                      onPageTitle.match(/chapter[_-]?\s*(\d+)/i) ||
-                     onPageTitle.match(/第\s*(\d+)\s*章/) ||
+                     onPageTItle.match(/第\s*(\d+)\s*章/) ||
                      onPageTitle.match(/(\d+)\s*화/); // Added Korean "Chapter"
 
     if (titleMatch) {
