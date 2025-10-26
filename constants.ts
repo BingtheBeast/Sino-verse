@@ -1,3 +1,8 @@
+//
+// ---------------------------------------------------
+// --- FINAL FILE: constants.ts ----------------------
+// ---------------------------------------------------
+//
 export const NOVELS_STORAGE_KEY = 'novels_v3';
 
 export const DEFAULT_CHINESE_GLOSSARY = `
@@ -109,7 +114,7 @@ Do not add any extra text, commentary, or annotations.`,
   },
 };
 
-export const GLOSSARY_SUGGESTION_PROMPT = `Analyze the following novel context/synopsis for a {{LANGUAGE_NAME}} web novel. Your goal is to identify key proper nouns (character names, places, sects, skills, items) and important recurring terms in their original {{LANGUAGE_NAME}} script.
+export const GLOSSARY_SUGGESTION_PROMPT = `Analyze the following novel context/synopsis for a {{LANGUAGE_NAME}} web novel. Your goal is to identify key proper nouns (character names, places, sects, skills, items) and important recurring terms in their original {{LANGUAGENAME}} script.
 
 For each term you identify, provide a suitable English translation or a standard pinyin/romanization for proper nouns.
 
@@ -133,8 +138,6 @@ type RegexRule = {
 
 // A list of find-and-replace rules to clean text BEFORE translation
 export const PRE_TRANSLATION_RULES: RegexRule[] = [
-  // FAULTY RULE REMOVED
-  
   // Rule 1: Removes excessive blank lines
   {
     pattern: /\n{3,}/g,
@@ -165,15 +168,19 @@ export const PRE_TRANSLATION_RULES: RegexRule[] = [
     replacement: '',
   },
 
-  // Rule 3: Add your own language-specific junk rules here
-  // (Example for Chinese ads)
+  // Rule 3: Language-specific junk rules
   {
     pattern: /.*广告.*/g, // Removes any line containing "广告" (advertisement)
     replacement: '',
   },
-  // (Example for Korean ads)
   {
     pattern: /.*광고.*/g, // Removes any line containing "광고" (advertisement)
     replacement: '',
   },
+
+  // --- Rule for booktoki divider ---
+  {
+    pattern: /^\s*\*\*\*\s*$/gm, // Removes the '***' divider line
+    replacement: '',
+  }
 ];
