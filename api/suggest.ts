@@ -30,7 +30,8 @@ export default async function handler(
 
   try {
     // --- CONDITIONAL PROXY LOGIC ---
-    const impitOptions: ConstructorParameters<typeof Impit>[0] = {
+    // Changed type to 'any' to fix TS2339
+    const impitOptions: any = {
       browser: 'chrome',
       timeout: 30000,
     };
@@ -123,7 +124,8 @@ export default async function handler(
      const filteredScores = new Map<string, number>();
      for (const [selector, score] of scores.entries()) {
          try {
-             if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) filteredScores..set(selector, score);
+             // --- FIXED THE TYPO HERE (was ..set) ---
+             if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) filteredScores.set(selector, score);
              else console.log(`Filtering out broad selector: ${selector} (matches ${$(selector).length})`);
          } catch { /* ignore */ }
      }
