@@ -3,13 +3,9 @@ import * as cheerio from 'cheerio';
 import { Impit } from 'impit';
 
 // --- PROXY ROTATION SETUP ---
-// Read the list from environment variables, or use your fallback.
-const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030';
-
-// Split the string into an array
+const PROXY_LIST_STRING = process.env.PROXY_LIST || 'http://bvyemiyl:jtgkjo170tmj@142.111.48.253:7030'; // Replace fallback with your NEW credentials if needed
 const PROXY_LIST = PROXY_LIST_STRING.split(',');
 
-// Function to get a random proxy from the list
 function getRandomProxy() {
   if (PROXY_LIST.length === 0) return undefined;
   const index = Math.floor(Math.random() * PROXY_LIST.length);
@@ -21,7 +17,6 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Read 'useProxy' from the query parameters
   const { url, useProxy } = req.query;
 
   if (typeof url !== 'string' || !url) {
@@ -29,9 +24,8 @@ export default async function handler(
   }
 
   try {
-    // --- CONDITIONAL PROXY LOGIC ---
-    // Changed type to 'any' to fix TS2339
-    const impitOptions: any = {
+    // --- CORRECTED PROXY LOGIC ---
+    const impitOptions: any = { // Use 'any' or 'ImpitOptions'
       browser: 'chrome',
       timeout: 30000,
     };
@@ -39,7 +33,8 @@ export default async function handler(
     if (useProxy === 'true') {
       const proxyUrl = getRandomProxy();
       if (proxyUrl) {
-        impitOptions.proxy = proxyUrl;
+        // --- THIS IS THE CORRECT OPTION NAME ---
+        impitOptions.proxyUrl = proxyUrl;
         console.log(`Fetching suggestions with impit.fetch (impersonating chrome) via proxy: ${proxyUrl} for URL: ${url}`);
       } else {
         console.warn(`Proxy use requested, but PROXY_LIST is empty or invalid. Fetching directly.`);
@@ -50,7 +45,7 @@ export default async function handler(
     }
 
     const client = new Impit(impitOptions);
-    // --- END CONDITIONAL LOGIC ---
+    // --- END CORRECTION ---
 
     const response = await client.fetch(url, {
       method: 'GET',
@@ -124,7 +119,7 @@ export default async function handler(
      const filteredScores = new Map<string, number>();
      for (const [selector, score] of scores.entries()) {
          try {
-             // --- FIXED THE TYPO HERE (was ..set) ---
+             // Corrected typo here
              if ($(selector).length <= 10 || (score > 5000 && $(selector).length <= 20)) filteredScores.set(selector, score);
              else console.log(`Filtering out broad selector: ${selector} (matches ${$(selector).length})`);
          } catch { /* ignore */ }
