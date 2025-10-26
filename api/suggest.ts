@@ -18,14 +18,11 @@ export default async function handler(
 
     // --- Corrected client.fetch call ---
     const response = await client.fetch(url, { // URL is first argument
-      method: 'GET',              // Standard options
-      redirect: 'follow',         // Standard options
-      // --- Impit specific options ---
-      impersonate: 'chrome116',   // Correctly placed impit option
-      timeout_ms: 30000,        // Correctly placed impit option
-      // proxyUrl: '...',        // Optional proxy
-      // ignoreTlsErrors: true, // Optional cert ignore
-      // --- End of Impit specific options ---
+      method: 'GET',
+      // redirect: 'follow', // Standard fetch option
+      // Impit specific options:
+      impersonate: 'chrome116',
+      timeout_ms: 30000,
     });
     // --- End of corrected call ---
 
@@ -39,7 +36,6 @@ export default async function handler(
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // --- Keep your existing scoring logic ---
     const scores = new Map<string, number>();
     const forbiddenTags = 'nav, header, footer, aside, script, style, form, button, a, ul, li, iframe, figure, figcaption, input, textarea, select, option';
 
@@ -114,7 +110,6 @@ export default async function handler(
     ]);
 
     const finalSuggestions = Array.from(suggestions).slice(0, 7);
-    // --- End of scoring logic ---
 
     res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=59');
     res.status(200).json(finalSuggestions);
