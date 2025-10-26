@@ -69,7 +69,11 @@ export default async function handler(
 
   try {
     // Always build the proxy URL for every request
-    const fetchUrl = PROXY_URL + url; // This proxy doesn't need encoding
+    // --- THIS IS THE FIX ---
+    // The target URL MUST be encoded to ensure its query parameters (like &)
+    // are treated as part of the proxy's 'quest' value, not as new
+    // parameters for the proxy request itself.
+    const fetchUrl = PROXY_URL + encodeURIComponent(url);
     
     // Always send these headers. The proxy will pass them on.
     const fetchOptions = {
