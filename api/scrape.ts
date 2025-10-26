@@ -1,32 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-import { Impit } from 'impit'; // Keep the import
+import { Impit } from 'impit';
 import { ScrapedChapter } from '../types'; // Adjust path if needed
 
 // --- Keep your existing constants and functions ---
 const nextLinkSelectors = [
-  "a:contains('Next Chapter')", "a:contains('next chapter')",
-  "a:contains('Next')", "a:contains('next')", "a[rel='next']",
-  "a.next-page", "a.nav-next", "a#next_chap", "a.btn-next",
-  "a:contains('下一章')", "a:contains('下章')",
-  "a:contains('다음화')", "a:contains('다음 편')",
-  "#goNextBtn"
+  "a:contains('Next Chapter')", "a:contains('next chapter')", "a:contains('Next')",
+  "a:contains('next')", "a[rel='next']", "a.next-page", "a.nav-next",
+  "a#next_chap", "a.btn-next", "a:contains('下一章')", "a:contains('下章')",
+  "a:contains('다음화')", "a:contains('다음 편')", "#goNextBtn"
 ].join(', ');
 
 const prevLinkSelectors = [
-  "a:contains('Previous Chapter')", "a:contains('previous chapter')",
-  "a:contains('Previous')", "a:contains('previous')", "a[rel='prev']",
-  "a.prev-page", "a.nav-previous", "a#prev_chap", "a.btn-prev",
-  "a:contains('上一章')", "a:contains('上章')",
-  "a:contains('이전화')", "a:contains('이전 편')",
-  "#goPrevBtn"
+  "a:contains('Previous Chapter')", "a:contains('previous chapter')", "a:contains('Previous')",
+  "a:contains('previous')", "a[rel='prev']", "a.prev-page", "a.nav-previous",
+  "a#prev_chap", "a.btn-prev", "a:contains('上一章')", "a:contains('上章')",
+  "a:contains('이전화')", "a:contains('이전 편')", "#goPrevBtn"
 ].join(', ');
 
 const onPageTitleSelectors = [
-  '.chapter-title', '#chapter-title', "*:contains('分卷阅读')",
-  "*:contains('Chapter ')", "*:contains('CHAPTER ')", "*:contains('第')",
-  '.content-title', '.entry-title', 'h1', 'h2',
-  '.toon-title'
+  '.chapter-title', '#chapter-title', "*:contains('分卷阅读')", "*:contains('Chapter ')",
+  "*:contains('CHAPTER ')", "*:contains('第')", '.content-title', '.entry-title',
+  'h1', 'h2', '.toon-title'
 ].join(', ');
 
 function resolveUrl(baseUrl: string, relativeUrl: string | undefined): string | null {
@@ -56,30 +51,29 @@ export default async function handler(
   }
 
   const allTitleSelectors = [
-      onPageTitleSelectors,
-      `${selector} h1`,
-      `${selector} h2`,
-      `${selector} h3`,
+      onPageTitleSelectors, `${selector} h1`, `${selector} h2`, `${selector} h3`,
   ].join(', ');
 
   try {
-    const client = new Impit({
-        // Optional proxy setup if needed later
-        // proxyUrl: '...',
-    });
+    const client = new Impit({}); // Pass empty options object or specific config
     console.log(`Fetching with impit.fetch (impersonating chrome): ${url}`);
 
-    // --- Use client.fetch ---
+    // --- Corrected client.fetch call ---
+    // Impersonate and timeout are options specific to impit's fetch,
+    // passed in the second argument alongside standard RequestInit options.
     const response = await client.fetch(url, { // URL is first argument
-      method: 'GET', // Options object is second argument
-      impersonate: 'chrome116',
-      timeout_ms: 45000,
-      redirect: 'follow',
-      // Headers can be added here if needed, e.g., { 'Custom-Header': 'value' }
+      method: 'GET',              // Standard RequestInit options
+      redirect: 'follow',         // Standard RequestInit options
+      // --- Impit specific options ---
+      impersonate: 'chrome116',   // Correctly placed impit option
+      timeout_ms: 45000,        // Correctly placed impit option
+      // proxyUrl: '...',        // If you needed a proxy
+      // ignoreTlsErrors: true, // If you needed to ignore cert issues
+      // --- End of Impit specific options ---
     });
-    // --- End of impit usage ---
+    // --- End of corrected call ---
 
-    if (!response.ok) { // Standard fetch-like 'ok' property check
+    if (!response.ok) {
         let errorBody = '';
         try { errorBody = await response.text(); } catch { /* ignore */ }
         console.error(`Impit fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
@@ -89,7 +83,7 @@ export default async function handler(
         throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${url}`);
     }
 
-    const html = await response.text(); // Use await response.text()
+    const html = await response.text();
     const $ = cheerio.load(html);
 
     const $content = $(selector);
@@ -99,7 +93,7 @@ export default async function handler(
     }
 
     // --- Keep your existing junk removal logic ---
-    const junkSelectors = [ /* ... as before ... */
+    const junkSelectors = [
         "*:contains('请在')", "*:contains('read at')", "*:contains('最新章节')",
         "*:contains('本站域名')", "*:contains('Advertisement')", "*:contains('章节报错')",
         "*:contains('Please support our website')", "*:contains('Share this chapter')",
