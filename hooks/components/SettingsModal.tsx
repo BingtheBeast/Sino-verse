@@ -5,18 +5,22 @@ import { XIcon } from './icons';
 import Loader from './common/Loader';
 import { generateGlossarySuggestions } from '../../services/aiService';
 
+// Updated interface
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   novel: Novel | null;
-  // Updated type
-  onSave: (novelId: string, settings: { customGlossary: string; aiProvider: 'gemini' | 'groq' | 'gemini-flash' }) => void;
+  onSave: (novelId: string, settings: { 
+    customGlossary: string; 
+    aiProvider: 'gemini' | 'groq' | 'gemini-flash';
+    useProxy: boolean; // Added this
+  }) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, onSave }) => {
   const [customGlossary, setCustomGlossary] = useState('');
-  // Updated type
   const [aiProvider, setAiProvider] = useState<'gemini' | 'groq' | 'gemini-flash'>('gemini');
+  const [useProxy, setUseProxy] = useState(false); // Added this state
   const [context, setContext] = useState('');
   const [suggestions, setSuggestions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -26,7 +30,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
   useEffect(() => {
     if (novel) {
       setCustomGlossary(novel.customGlossary || '');
-      // Ensure provider defaults correctly if existing novel has an old value
+      setUseProxy(novel.useProxy || false); // Load current proxy setting
       const currentProvider = novel.aiProvider === 'gemini' || novel.aiProvider === 'groq' || novel.aiProvider === 'gemini-flash'
           ? novel.aiProvider
           : 'gemini';
@@ -40,7 +44,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
   if (!novel) return null;
 
   const handleSave = () => {
-    onSave(novel.id, { customGlossary, aiProvider });
+    // Pass useProxy on save
+    onSave(novel.id, { customGlossary, aiProvider, useProxy });
     onClose();
   };
 
@@ -86,16 +91,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, novel, o
               <select
                 id="aiProvider"
                 value={aiProvider}
-                // Updated type
                 onChange={(e) => setAiProvider(e.target.value as 'gemini' | 'groq' | 'gemini-flash')}
                 className="mt-1 block w-full rounded-md border-[--border-color] bg-[--input-bg] text-[--text-color] shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
               >
                 <option value="gemini">Gemini (Higher Quality)</option>
                 <option value="groq">Groq (Faster Speed)</option>
-                {/* Added gemini-flash Option */}
                 <option value="gemini-flash">Gemini-Flash (Mid, via OpenRouter)</option>
               </select>
             </div>
+
+            {/* --- ADDED THIS CHECKBOX --- */}
+            <div className="flex items-center pt-2">
+                <input
+                    id="useProxySettings"
+                    type="checkbox"
+                    checked={useProxy}
+                    onChange={(e) => setUseProxy(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="useProxySettings" className="ml-2 block text-sm text-[--status-text]">
+                    Use Proxy for scraping? (For blocked sites)
+                </label>
+            </div>
+            
             <div>
                 <label htmlFor="customGlossary" className="block text-sm font-medium text-[--status-text] mb-1">
                   Custom Glossary (Built-in glossary will override conflicting terms)
