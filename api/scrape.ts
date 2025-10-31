@@ -165,7 +165,7 @@ export default async function handler(
         console.log(`Found ${$paragraphs.length} <p> tags...`);
         $paragraphs.each((_, el) => {
             const text = $(el).text().trim();
-            if (text && text.length > 10 && !text.toLowerCase().includes('advertisement')) paragraphs.push(text);
+            if (text && text.length > 0 && !text.toLowerCase().includes('advertisement')) paragraphs.push(text);
         });
     }
 
@@ -179,7 +179,7 @@ export default async function handler(
                 if (el.name === 'div' || el.name === 'section' || el.name === 'article') text = $el.text().trim();
                 else if (el.name === 'br' && paragraphs.length > 0 && paragraphs[paragraphs.length - 1] !== '') paragraphs.push('');
             } else if (el.type === 'text') text = $el.text().trim();
-            if (text && text.length > 5 && !text.toLowerCase().includes('advertisement') && (paragraphs.length === 0 || paragraphs[paragraphs.length - 1] !== text)) paragraphs.push(text);
+            if (text && text.length > 0 && !text.toLowerCase().includes('advertisement') && (paragraphs.length === 0 || paragraphs[paragraphs.length - 1] !== text)) paragraphs.push(text);
         });
     }
     const finalParagraphs = paragraphs.filter(p => p.trim().length > 0);
@@ -215,3 +215,4 @@ export default async function handler(
     res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
+
