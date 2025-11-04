@@ -117,24 +117,21 @@ export default async function handler(
       console.log(`Fetching with Oxylabs Scraper API for URL: ${url}`);
       html = await fetchWithOxylabs(url);
     } else {
-      // --- Use standard Impit (no proxy) for simple sites ---
-      console.log(`Fetching with impit.fetch (impersonating chrome) directly (no proxy): ${url}`);
-      const client = new Impit({
-        browser: 'chrome',
-        timeout: 45000,
-      });
+      // --- MODIFIED BLOCK: Use standard fetch (no proxy) for simple sites ---
+      console.log(`Fetching with standard fetch (no proxy): ${url}`);
 
-      const response = await client.fetch(url, {
+      const response = await fetch(url, {
         method: 'GET',
+        headers: {
+          // Add a basic user-agent just in case
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36'
+        }
       });
 
       if (!response.ok) {
           let errorBody = '';
           try { errorBody = await response.text(); } catch { /* ignore */ }
-          console.error(`Impit fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
-          let headersInfo = '';
-          try { headersInfo = JSON.stringify(Object.fromEntries(response.headers.entries())); } catch { /* ignore */ }
-          console.error(`Failing URL: ${url}, Headers: ${headersInfo}`);
+          console.error(`Standard fetch failed: Status ${response.status}, Body: ${errorBody.substring(0, 500)}`);
           throw new Error(`Failed to fetch: ${response.status} ${response.statusText} from ${url}`);
       }
       html = await response.text();
@@ -215,4 +212,3 @@ export default async function handler(
     res.status(500).json({ error: `Failed to scrape chapter content from ${url}. Reason: ${message}` });
   }
 }
-
